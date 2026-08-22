@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "oshi-calendar",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-08-22",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
+  "triggers": {
+    "crons": ["0 18 * * *"]
+  },
+  "vars": {
+    "DATA_RANGE_MONTHS": "6",
+    "COLLECTOR_URL": ""
+  },
+  "kv_namespaces": [
+    {
+      "binding": "EVENTS_KV",
+      "id": "REPLACE_WITH_EVENTS_KV_NAMESPACE_ID"
+    }
+  ]
+}
