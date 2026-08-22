@@ -220,9 +220,9 @@ function App() {
             <h1>推し活カレンダー</h1>
             <p>3組の予定を、ひとつのカレンダーに。</p>
           </div>
-          <div className="header-note" aria-label="2026年8月22日時点の公式確認済みデータ">
+          <div className="header-note" aria-label="2026年8月22日時点の公開情報スナップショット">
             <span className="live-dot" />
-            <span>VERIFIED SNAPSHOT</span>
+            <span>SNAPSHOT 2026.08.22</span>
           </div>
         </div>
       </header>
@@ -385,8 +385,11 @@ function App() {
 
       <footer className="app-footer">
         <span>推し活カレンダー｜非公式ファン作成</span>
-        <span>Schedule snapshot: 2026.08.22</span>
+        <span>公開情報スナップショット：2026年8月22日時点</span>
         <span>最新情報・受付条件は公式ページをご確認ください</span>
+        <p className="app-footer-warning">
+          このアプリは公式運営とは関係ありません。掲載情報の利用・転載は各公式サイトの規約・権利条件に従ってください。
+        </p>
       </footer>
     </div>
   );

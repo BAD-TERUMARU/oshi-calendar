@@ -772,6 +772,13 @@ button {
   font-size: 10px;
 }
 
+.app-footer-warning {
+  width: 100%;
+  margin: 0;
+  color: #7f8998;
+  line-height: 1.7;
+}
+
 @media (max-width: 900px) {
   .workspace-grid {
     grid-template-columns: minmax(0, 1fr);
