@@ -18,7 +18,7 @@ OCHA NORMA、モーニング娘。'26、宮本佳林の予定をまとめる月�
 
 ## 投稿前に追記するもの
 
-- GitHubリポジトリURL
+- GitHubリポジトリURL: https://github.com/BAD-TERUMARU/oshi-calendar
 - 公開後のデモURL（あれば）
 - 投稿時点の画面キャプチャ確認
 
