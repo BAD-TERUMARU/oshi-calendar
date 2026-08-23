@@ -2,6 +2,12 @@
 
 OCHA NORMA、モーニング娘。'26、宮本佳林のライブ・イベント予定を、月間カレンダーで確認する非公式ファン向けWebアプリです。
 
+## 公開URL
+
+実際のアプリ: <https://oshi-calendar.badterumaru.workers.dev/>
+
+Cloudflare Workers Static Assetsで公開しています。現時点では、2026年8月22日時点の確認済みスナップショットを配信しています。
+
 ## できること
 
 - 月間カレンダーでイベントを一覧表示
@@ -15,7 +21,7 @@ OCHA NORMA、モーニング娘。'26、宮本佳林のライブ・イベント�
 
 このリポジトリには、2026年8月22日時点で公式公開ページを確認して整理した「公開情報スナップショット」を同梱しています。これは取得日時点の記録であり、最新情報や将来の変更を保証するものではありません。チケット状況や受付条件は変更される可能性があるため、利用時は各イベントの公式リンクを確認してください。
 
-現時点では、ページの自動巡回・自動解析・日次自動更新は実装していません。将来の更新方式を検討するためのCloudflare Worker/KV構成は、`cloudflare/` と `wrangler.example.jsonc` に任意構成として記録しています。
+現時点では、ページの自動巡回・自動解析・日次自動更新は実装していません。Cloudflare上でも、データは同梱スナップショットを配信しています。将来の更新方式を検討するためのWorker/KV構成は、`cloudflare/` と `wrangler.example.jsonc` に記録しています。
 
 ## 起動方法
 
@@ -36,9 +42,15 @@ npm run preview
 - React
 - TypeScript
 - Vite
-- Cloudflare Pages/Workers向けの任意デプロイ設定
+- Cloudflare Workers Static Assets
 
 通常利用では、イベントデータを含む静的なフロントエンドとして動作します。`/api/events` が利用できる環境ではリモートスナップショットを読み込み、利用できない場合は同梱データにフォールバックします。
+
+Cloudflareへのデプロイ:
+
+```bash
+npm run cf:deploy
+```
 
 ## 公開データの取り扱い
 

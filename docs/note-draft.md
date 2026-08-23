@@ -141,7 +141,9 @@ FC向けイベントであっても、開催告知が一般公開されている
 
 ## GitHubで公開しています
 
-現在はソースコードとREADMEのみ、GitHubで公開しています。アプリ本体の公開デモURLはまだありません。
+実際のアプリはこちらです：<https://oshi-calendar.badterumaru.workers.dev/>
+
+※掲載情報は2026年8月22日時点の公開情報スナップショットです。現在はソースコードとREADMEもGitHubで公開しています。
 
 [GitHubリポジトリ：BAD-TERUMARU/oshi-calendar](https://github.com/BAD-TERUMARU/oshi-calendar)
 

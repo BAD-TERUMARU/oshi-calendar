@@ -1,6 +1,6 @@
-# Cloudflare構成（将来の任意構成）
+# Cloudflare構成
 
-このディレクトリは、将来Cloudflareを使って配信・更新する場合の設計メモです。現在の完成版は同梱スナップショットを使う静的なアプリであり、CloudflareのCron SchedulerやKVを実運用には登録していません。
+現在はCloudflare Workers Static Assetsで、同梱スナップショットを常時配信しています。公開URLは <https://oshi-calendar.badterumaru.workers.dev/> です。CloudflareのCron SchedulerやKVによる自動更新は、まだ有効化していません。
 
 ## 構成
 
@@ -14,7 +14,17 @@
 `wrangler.jsonc` の `DATA_RANGE_MONTHS` で指定します。初期値は「日本時間の今日から6か月先」です。
 開催前のイベントは毎回再確認し、受付状況や公式URLの変更を反映する設計です。
 
-## 将来のデプロイ準備
+## 現在のデプロイ
+
+ルートの `wrangler.jsonc` が公開用設定です。ビルドとデプロイは次で行います。
+
+```bash
+npm run cf:deploy
+```
+
+現在の構成では、画面は静的アセットとして配信し、`/api/events` と `/api/health` のみWorkerが処理します。KVやコレクターが未設定のため、APIは同梱スナップショットを返します。
+
+## 将来の自動更新準備
 
 1. `wrangler.example.jsonc` を `wrangler.jsonc` にコピーする
 2. `npx wrangler kv namespace create EVENTS_KV` でKVを作成する
