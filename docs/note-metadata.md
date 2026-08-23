@@ -10,11 +10,11 @@
 
 ## タグ案
 
-- AI
-- Codex
-- React
-- TypeScript
+- 推し活
 - 個人開発
+- AI開発
+- Codex
+- Webアプリ
 
 ## 投稿前に追記するもの
 
