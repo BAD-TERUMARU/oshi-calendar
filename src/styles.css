@@ -484,6 +484,14 @@ button {
   white-space: nowrap;
 }
 
+.chip-location {
+  display: none;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chip-range {
   flex: 0 0 auto;
   margin-left: auto;
@@ -916,6 +924,14 @@ button {
 
   .chip-mark {
     font-size: 7px;
+  }
+
+  .chip-title {
+    display: none;
+  }
+
+  .chip-location {
+    display: block;
   }
 
   .chip-range {

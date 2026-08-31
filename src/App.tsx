@@ -58,7 +58,26 @@ const INITIAL_EVENT_TYPES: Record<EventType, boolean> = {
 };
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
-const JAPANESE_HOLIDAYS = new Set(["2026-09-21", "2026-09-22", "2026-09-23"]);
+const JAPANESE_HOLIDAYS: Record<string, string> = {
+  "2026-01-01": "元日",
+  "2026-01-12": "成人の日",
+  "2026-02-11": "建国記念の日",
+  "2026-02-23": "天皇誕生日",
+  "2026-03-20": "春分の日",
+  "2026-04-29": "昭和の日",
+  "2026-05-03": "憲法記念日",
+  "2026-05-04": "みどりの日",
+  "2026-05-05": "こどもの日",
+  "2026-05-06": "休日（振替休日）",
+  "2026-07-20": "海の日",
+  "2026-08-11": "山の日",
+  "2026-09-21": "敬老の日",
+  "2026-09-22": "休日（国民の休日）",
+  "2026-09-23": "秋分の日",
+  "2026-10-12": "スポーツの日",
+  "2026-11-03": "文化の日",
+  "2026-11-23": "勤労感謝の日",
+};
 const INITIAL_MONTH = new Date(2026, 8, 1);
 const INITIAL_DATE = "2026-09-04";
 
@@ -328,7 +347,8 @@ function App() {
                 const dayEvents = eventsByDate.get(key) ?? [];
                 const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
                 const isSelected = key === selectedDate;
-                const isHoliday = JAPANESE_HOLIDAYS.has(key);
+                const holidayName = JAPANESE_HOLIDAYS[key];
+                const isHoliday = Boolean(holidayName);
                 const weekday = date.getDay();
                 return (
                   <button
@@ -341,7 +361,8 @@ function App() {
                     type="button"
                     role="gridcell"
                     aria-selected={isSelected}
-                    aria-label={`${formatLongDate(key)}${isHoliday ? "、祝日" : ""}${dayEvents.length ? `、イベント${dayEvents.length}件` : ""}`}
+                    aria-label={`${formatLongDate(key)}${holidayName ? `、${holidayName}` : ""}${dayEvents.length ? `、イベント${dayEvents.length}件` : ""}`}
+                    title={holidayName ? `${holidayName}（祝日）` : undefined}
                     onClick={() => setSelectedDate(key)}
                   >
                     <span className={`day-number weekday-${weekday}`}>{date.getDate()}</span>
@@ -350,6 +371,7 @@ function App() {
                         <span className="event-chip" key={event.id} style={eventStyle(event.artist)}>
                           <span className="chip-mark">{ARTISTS[event.artist].mark}</span>
                           <span className="chip-title">{event.shortTitle}</span>
+                          <span className="chip-location">{event.venue ?? event.prefecture ?? event.shortTitle}</span>
                           {event.endDate && <span className="chip-range">期間</span>}
                         </span>
                       ))}
@@ -359,7 +381,7 @@ function App() {
                 );
               })}
             </div>
-            <p className="calendar-footnote">※ 期間イベントは開催期間中の日付に表示しています</p>
+            <p className="calendar-footnote">※ 赤字は日曜・祝日です。期間イベントは開催期間中の日付に表示しています</p>
           </section>
 
           <aside className="details-panel" aria-labelledby="details-heading">
