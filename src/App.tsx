@@ -371,7 +371,7 @@ function App() {
                         <span className="event-chip" key={event.id} style={eventStyle(event.artist)}>
                           <span className="chip-mark">{ARTISTS[event.artist].mark}</span>
                           <span className="chip-title">{event.shortTitle}</span>
-                          <span className="chip-location">{event.venue ?? event.prefecture ?? event.shortTitle}</span>
+                          <span className="chip-location">{event.prefecture ?? event.venue ?? event.shortTitle}</span>
                           {event.endDate && <span className="chip-range">期間</span>}
                         </span>
                       ))}
