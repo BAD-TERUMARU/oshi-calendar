@@ -80,6 +80,7 @@ const JAPANESE_HOLIDAYS: Record<string, string> = {
 };
 const INITIAL_MONTH = new Date(2026, 8, 1);
 const INITIAL_DATE = "2026-09-04";
+const WANT_TO_GO_STORAGE_KEY = "oshi-calendar-want-to-go";
 
 function toIsoDate(date: Date) {
   const year = date.getFullYear();
@@ -134,6 +135,135 @@ function formatRange(event: CalendarEvent) {
     : formatShortDate(event.startDate);
 }
 
+function loadWantToGoIds() {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const stored = window.localStorage.getItem(WANT_TO_GO_STORAGE_KEY);
+    if (!stored) return [];
+
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function getNextIsoDate(value: string) {
+  const nextDate = parseIsoDate(value);
+  nextDate.setDate(nextDate.getDate() + 1);
+  return toIsoDate(nextDate);
+}
+
+function formatIcsDate(value: string) {
+  return value.replace(/-/g, "");
+}
+
+function formatIcsTimestamp(value: Date) {
+  return value.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+function escapeIcsText(value: string) {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/\r?\n/g, "\\n")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,");
+}
+
+function foldIcsLine(line: string) {
+  const encoder = new TextEncoder();
+  const chunks: string[] = [];
+  let chunk = "";
+  let byteLength = 0;
+
+  for (const character of line) {
+    const characterLength = encoder.encode(character).length;
+    const byteLimit = chunks.length ? 74 : 75;
+
+    if (chunk && byteLength + characterLength > byteLimit) {
+      chunks.push(chunk);
+      chunk = ` ${character}`;
+      byteLength = 1 + characterLength;
+    } else {
+      chunk += character;
+      byteLength += characterLength;
+    }
+  }
+
+  if (chunk || !chunks.length) chunks.push(chunk);
+  return chunks.join("\r\n");
+}
+
+function formatIcsDescription(event: CalendarEvent) {
+  const sessionDetails = event.sessions
+    ?.map((session, index) => {
+      const label = session.label ?? `${index + 1}公演`;
+      const times = [
+        session.doors ? `開場 ${session.doors}` : "",
+        session.start ? `開演 ${session.start}` : "",
+      ]
+        .filter(Boolean)
+        .join(" / ");
+      return [label, times].filter(Boolean).join(" ");
+    })
+    .join("、");
+  const ticketPeriod = event.ticketSalesDate
+    ? `${formatShortDate(event.ticketSalesDate)}〜${
+        event.ticketSalesEndDate ? formatShortDate(event.ticketSalesEndDate) : ""
+      }`
+    : "";
+
+  return [
+    `正式名称: ${event.title}`,
+    `開催日: ${formatRange(event)}`,
+    event.prefecture ? `場所: ${event.prefecture}` : "",
+    event.venue ? `会場: ${event.venue}` : "",
+    sessionDetails ? `公演時間: ${sessionDetails}` : "",
+    event.ticketStatus ? `チケット: ${event.ticketStatus}` : "",
+    ticketPeriod ? `受付期間: ${ticketPeriod}` : "",
+    event.notes ?? "",
+    event.officialUrl ? `公式情報: ${event.officialUrl}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildIcs(selectedEvents: CalendarEvent[]) {
+  const timestamp = formatIcsTimestamp(new Date());
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//BAD-TERUMARU//Oshi Calendar//JA",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "X-WR-CALNAME:推し活カレンダー（行きたい予定）",
+    ...selectedEvents.flatMap((event) => {
+      const location = [event.prefecture, event.venue].filter(Boolean).join(" / ");
+      const summary = `${ARTISTS[event.artist].label}｜${event.shortTitle}`;
+      const eventLines = [
+        "BEGIN:VEVENT",
+        `UID:${event.id}@oshi-calendar.badterumaru.workers.dev`,
+        `DTSTAMP:${timestamp}`,
+        `DTSTART;VALUE=DATE:${formatIcsDate(event.startDate)}`,
+        `DTEND;VALUE=DATE:${formatIcsDate(getNextIsoDate(event.endDate ?? event.startDate))}`,
+        `SUMMARY:${escapeIcsText(summary)}`,
+        location ? `LOCATION:${escapeIcsText(location)}` : "",
+        `DESCRIPTION:${escapeIcsText(formatIcsDescription(event))}`,
+        event.officialUrl ? `URL:${event.officialUrl}` : "",
+        "TRANSP:TRANSPARENT",
+        "END:VEVENT",
+      ];
+      return eventLines.filter(Boolean);
+    }),
+    "END:VCALENDAR",
+  ];
+
+  return `${lines.map(foldIcsLine).join("\r\n")}\r\n`;
+}
+
 function eventStyle(artist: ArtistId) {
   return {
     "--event-color": ARTISTS[artist].color,
@@ -172,6 +302,7 @@ function App() {
   });
   const [visibleEventTypes, setVisibleEventTypes] =
     useState<Record<EventType, boolean>>(INITIAL_EVENT_TYPES);
+  const [wantToGoIds, setWantToGoIds] = useState<string[]>(() => loadWantToGoIds());
 
   useEffect(() => {
     let isActive = true;
@@ -190,6 +321,16 @@ function App() {
       isActive = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      window.localStorage.setItem(WANT_TO_GO_STORAGE_KEY, JSON.stringify(wantToGoIds));
+    } catch {
+      // Private browsing or storage restrictions should not block the calendar.
+    }
+  }, [wantToGoIds]);
 
   const calendarDays = useMemo(() => getCalendarDays(currentMonth), [currentMonth]);
   const visibleEvents = useMemo(
@@ -213,6 +354,10 @@ function App() {
     return map;
   }, [calendarDays, visibleEvents]);
   const selectedEvents = eventsByDate.get(selectedDate) ?? [];
+  const wantedEvents = useMemo(
+    () => calendarEvents.filter((event) => wantToGoIds.includes(event.id)),
+    [calendarEvents, wantToGoIds],
+  );
 
   function changeMonth(offset: number) {
     const nextMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + offset, 1);
@@ -245,6 +390,28 @@ function App() {
 
       return next;
     });
+  }
+
+  function toggleWantToGo(eventId: string) {
+    setWantToGoIds((current) =>
+      current.includes(eventId)
+        ? current.filter((id) => id !== eventId)
+        : [...current, eventId],
+    );
+  }
+
+  function exportWantToGo() {
+    if (!wantedEvents.length) return;
+
+    const blob = new Blob([buildIcs(wantedEvents)], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `oshi-calendar-want-to-go-${toIsoDate(new Date())}.ics`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   const availableEventTypes = EVENT_FILTER_ORDER.filter((eventType) =>
@@ -345,7 +512,21 @@ function App() {
                 <span className="section-kicker">MONTH VIEW</span>
                 <h2 id="calendar-heading">予定を探す</h2>
               </div>
-              <span className="event-count">{visibleEvents.length}件の登録</span>
+              <div className="calendar-heading-meta">
+                <span className="event-count">{visibleEvents.length}件の登録</span>
+                <span className="want-to-go-count" aria-live="polite">
+                  {wantedEvents.length}件 行きたい
+                </span>
+                <button
+                  className="export-calendar-button"
+                  type="button"
+                  onClick={exportWantToGo}
+                  disabled={!wantedEvents.length}
+                  title={wantedEvents.length ? undefined : "詳細画面で「行きたい」を選択してください"}
+                >
+                  カレンダーへ追加
+                </button>
+              </div>
             </div>
 
             <div className="calendar-grid" role="grid" aria-label={`${formatMonth(currentMonth)}のカレンダー`}>
@@ -397,7 +578,9 @@ function App() {
                 );
               })}
             </div>
-            <p className="calendar-footnote">※ 赤字は日曜・祝日です。期間イベントは開催期間中の日付に表示しています</p>
+            <p className="calendar-footnote">
+              ※ 赤字は日曜・祝日です。期間イベントは開催期間中の日付に表示しています。「行きたい」を選んだ予定は「カレンダーへ追加」から終日予定として書き出せます（公演時間は説明欄に記載）。
+            </p>
           </section>
 
           <aside className="details-panel" aria-labelledby="details-heading">
@@ -412,7 +595,12 @@ function App() {
             {selectedEvents.length ? (
               <div className="detail-cards">
                 {selectedEvents.map((event) => (
-                  <EventDetailCard event={event} key={event.id} />
+                  <EventDetailCard
+                    event={event}
+                    isWanted={wantToGoIds.includes(event.id)}
+                    onToggleWantToGo={toggleWantToGo}
+                    key={event.id}
+                  />
                 ))}
               </div>
             ) : (
@@ -438,16 +626,35 @@ function App() {
   );
 }
 
-function EventDetailCard({ event }: { event: CalendarEvent }) {
+function EventDetailCard({
+  event,
+  isWanted,
+  onToggleWantToGo,
+}: {
+  event: CalendarEvent;
+  isWanted: boolean;
+  onToggleWantToGo: (eventId: string) => void;
+}) {
   const artist = ARTISTS[event.artist];
   return (
     <article className="detail-card" style={eventStyle(event.artist)}>
       <div className="detail-card-topline">
-        <span className="artist-pill">
-          <span className="pill-mark">{artist.mark}</span>
-          {artist.label}
-        </span>
-        <span className="event-type">{EVENT_TYPE_LABELS[event.eventType]}</span>
+        <div className="detail-card-topline-main">
+          <span className="artist-pill">
+            <span className="pill-mark">{artist.mark}</span>
+            {artist.label}
+          </span>
+          <span className="event-type">{EVENT_TYPE_LABELS[event.eventType]}</span>
+        </div>
+        <label className={`want-to-go-toggle ${isWanted ? "is-checked" : ""}`}>
+          <input
+            type="checkbox"
+            checked={isWanted}
+            onChange={() => onToggleWantToGo(event.id)}
+          />
+          <span className="want-to-go-box" aria-hidden="true" />
+          <span>行きたい</span>
+        </label>
       </div>
       <h3>{event.title}</h3>
       <div className="detail-period">

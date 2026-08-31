@@ -333,6 +333,7 @@ button {
 }
 
 .card-heading {
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 12px;
   padding: 0 2px 18px;
@@ -348,6 +349,50 @@ button {
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;
+}
+
+.calendar-heading-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.want-to-go-count {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #f4f0ff;
+  color: #7652b7;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.export-calendar-button {
+  padding: 8px 11px;
+  border: 1px solid var(--navy);
+  border-radius: 9px;
+  background: var(--navy);
+  color: white;
+  font-size: 10px;
+  font-weight: 800;
+  transition: 160ms ease;
+}
+
+.export-calendar-button:hover:not(:disabled) {
+  border-color: #2d456c;
+  background: #2d456c;
+}
+
+.export-calendar-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.export-calendar-button:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.18);
+  outline-offset: 2px;
 }
 
 .calendar-grid {
@@ -546,9 +591,80 @@ button {
 }
 
 .detail-card-topline {
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 12px;
+}
+
+.detail-card-topline-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.want-to-go-toggle {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid #dfe5ee;
+  border-radius: 999px;
+  background: #fafbfd;
+  color: #778296;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+  transition: 160ms ease;
+}
+
+.want-to-go-toggle:hover {
+  border-color: #b8c3d3;
+  color: var(--navy);
+}
+
+.want-to-go-toggle.is-checked {
+  border-color: color-mix(in srgb, var(--event-color) 35%, #dfe5ee);
+  background: var(--event-soft);
+  color: var(--event-color);
+}
+
+.want-to-go-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.want-to-go-box {
+  display: grid;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid #aeb9c9;
+  border-radius: 4px;
+  place-items: center;
+  background: white;
+}
+
+.want-to-go-toggle input:checked + .want-to-go-box {
+  border-color: var(--event-color);
+  background: var(--event-color);
+}
+
+.want-to-go-toggle input:checked + .want-to-go-box::after {
+  color: white;
+  content: "✓";
+  font-size: 10px;
+  line-height: 1;
+}
+
+.want-to-go-toggle input:focus-visible + .want-to-go-box {
+  outline: 3px solid color-mix(in srgb, var(--event-color) 24%, transparent);
+  outline-offset: 2px;
 }
 
 .artist-pill,
@@ -881,7 +997,14 @@ button {
   }
 
   .card-heading {
+    align-items: flex-start;
     padding: 5px 3px 13px;
+  }
+
+  .calendar-heading-meta {
+    width: 100%;
+    justify-content: space-between;
+    gap: 6px;
   }
 
   .card-heading h2 {
