@@ -26,6 +26,8 @@ export interface EventSession {
   label?: string;
   doors?: string;
   start?: string;
+  /** 終演・終了時刻が公式に確認できる場合だけ指定します。 */
+  end?: string;
 }
 
 export interface CalendarEvent {

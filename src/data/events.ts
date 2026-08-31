@@ -759,6 +759,7 @@ export const events: CalendarEvent[] = [
     prefecture: "神奈川県",
     eventType: "individual",
     performers: ["斉藤円香"],
+    sessions: [{ label: "イベント", start: "09:30", end: "15:30" }],
     notes: "9:30〜15:30。入場無料（一部有料コンテンツあり）。荒天中止。",
     ticketStatus: "無料",
     officialUrl:

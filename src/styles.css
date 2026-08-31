@@ -767,6 +767,12 @@ button {
   margin-bottom: 8px;
 }
 
+.subheading-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
 .subheading span {
   color: var(--event-color);
   font-size: 8px;
@@ -776,6 +782,16 @@ button {
 .subheading strong {
   color: #59667b;
   font-size: 11px;
+}
+
+.session-selection-note {
+  display: inline-flex !important;
+  margin-left: auto;
+  color: #9aa4b4 !important;
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  white-space: nowrap;
 }
 
 .sessions-list {
@@ -798,6 +814,53 @@ button {
 .session-row strong {
   color: var(--event-color);
   font-size: 11px;
+}
+
+.session-choice {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+
+.session-choice input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.session-check-box {
+  display: grid;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  border: 1.5px solid color-mix(in srgb, var(--event-color) 45%, #c3ccd9);
+  border-radius: 4px;
+  place-items: center;
+  background: white;
+}
+
+.session-choice input:checked + .session-check-box {
+  border-color: var(--event-color);
+  background: var(--event-color);
+}
+
+.session-choice input:checked + .session-check-box::after {
+  color: white;
+  content: "✓";
+  font-size: 10px;
+  line-height: 1;
+}
+
+.session-choice input:focus-visible + .session-check-box {
+  outline: 3px solid color-mix(in srgb, var(--event-color) 24%, transparent);
+  outline-offset: 2px;
+}
+
+.session-choice.is-checked .session-label {
+  color: var(--event-color);
 }
 
 .session-label {

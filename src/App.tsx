@@ -81,6 +81,14 @@ const JAPANESE_HOLIDAYS: Record<string, string> = {
 const INITIAL_MONTH = new Date(2026, 8, 1);
 const INITIAL_DATE = "2026-09-04";
 const WANT_TO_GO_STORAGE_KEY = "oshi-calendar-want-to-go";
+const EXPORTED_WANT_TO_GO_STORAGE_KEY = "oshi-calendar-exported-want-to-go";
+
+type CalendarExportEntry = {
+  key: string;
+  event: CalendarEvent;
+  session?: NonNullable<CalendarEvent["sessions"]>[number];
+  sessionIndex?: number;
+};
 
 function toIsoDate(date: Date) {
   const year = date.getFullYear();
@@ -151,6 +159,60 @@ function loadWantToGoIds() {
   }
 }
 
+function loadExportedWantToGoKeys() {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const stored = window.localStorage.getItem(EXPORTED_WANT_TO_GO_STORAGE_KEY);
+    if (!stored) return [];
+
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function getSessionSelectionKey(event: CalendarEvent, sessionIndex: number) {
+  return `${event.id}::session-${sessionIndex}`;
+}
+
+function getEventSelectionKeys(event: CalendarEvent) {
+  return event.sessions?.length
+    ? event.sessions.map((_, index) => getSessionSelectionKey(event, index))
+    : [event.id];
+}
+
+function isEventWantToGo(selectedKeys: string[], event: CalendarEvent) {
+  if (selectedKeys.includes(event.id)) return true;
+  const selectionKeys = getEventSelectionKeys(event);
+  return selectionKeys.every((key) => selectedKeys.includes(key));
+}
+
+function isSessionWantToGo(selectedKeys: string[], event: CalendarEvent, sessionIndex: number) {
+  return (
+    selectedKeys.includes(event.id) ||
+    selectedKeys.includes(getSessionSelectionKey(event, sessionIndex))
+  );
+}
+
+function getWantToGoEntries(calendarEvents: CalendarEvent[], selectedKeys: string[]) {
+  return calendarEvents.flatMap<CalendarExportEntry>((event) => {
+    if (event.sessions?.length) {
+      const legacyEventSelection = selectedKeys.includes(event.id);
+      return event.sessions.flatMap((session, sessionIndex) => {
+        const key = getSessionSelectionKey(event, sessionIndex);
+        if (!legacyEventSelection && !selectedKeys.includes(key)) return [];
+        return [{ key, event, session, sessionIndex }];
+      });
+    }
+
+    return selectedKeys.includes(event.id) ? [{ key: event.id, event }] : [];
+  });
+}
+
 function getNextIsoDate(value: string) {
   const nextDate = parseIsoDate(value);
   nextDate.setDate(nextDate.getDate() + 1);
@@ -163,6 +225,20 @@ function formatIcsDate(value: string) {
 
 function formatIcsTimestamp(value: Date) {
   return value.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+function isValidTime(value: string | undefined): value is string {
+  if (!value) return false;
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value);
+  if (!match) return false;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
+}
+
+function formatIcsLocalDateTime(date: string, time: string) {
+  const [hour, minute] = time.split(":").map(Number);
+  return `${formatIcsDate(date)}T${String(hour).padStart(2, "0")}${String(minute).padStart(2, "0")}00`;
 }
 
 function escapeIcsText(value: string) {
@@ -197,19 +273,35 @@ function foldIcsLine(line: string) {
   return chunks.join("\r\n");
 }
 
-function formatIcsDescription(event: CalendarEvent) {
-  const sessionDetails = event.sessions
-    ?.map((session, index) => {
-      const label = session.label ?? `${index + 1}公演`;
-      const times = [
-        session.doors ? `開場 ${session.doors}` : "",
-        session.start ? `開演 ${session.start}` : "",
-      ]
-        .filter(Boolean)
-        .join(" / ");
-      return [label, times].filter(Boolean).join(" ");
-    })
-    .join("、");
+function formatSessionDetails(
+  session: NonNullable<CalendarEvent["sessions"]>[number],
+  index: number,
+  eventType: EventType,
+) {
+  const label = session.label ?? `${index + 1}公演`;
+  const isPerformance = ["concert", "birthday", "fc", "stage"].includes(eventType);
+  const startLabel = isPerformance ? "開演" : "開始";
+  const endLabel = isPerformance ? "終演" : "終了";
+  const times = [
+    session.doors ? `開場 ${session.doors}` : "",
+    session.start ? `${startLabel} ${session.start}` : "",
+    session.end ? `${endLabel} ${session.end}` : "",
+  ]
+    .filter(Boolean)
+    .join(" / ");
+  return [label, times].filter(Boolean).join(" ");
+}
+
+function formatIcsDescription(entry: CalendarExportEntry) {
+  const { event, session, sessionIndex } = entry;
+  const sessionLabel = session
+    ? session.label ?? `${(sessionIndex ?? 0) + 1}公演`
+    : "";
+  const sessionDetails = session
+    ? formatSessionDetails(session, sessionIndex ?? 0, event.eventType)
+    : event.sessions
+      ?.map((eventSession, index) => formatSessionDetails(eventSession, index, event.eventType))
+      .join("、");
   const ticketPeriod = event.ticketSalesDate
     ? `${formatShortDate(event.ticketSalesDate)}〜${
         event.ticketSalesEndDate ? formatShortDate(event.ticketSalesEndDate) : ""
@@ -221,6 +313,7 @@ function formatIcsDescription(event: CalendarEvent) {
     `開催日: ${formatRange(event)}`,
     event.prefecture ? `場所: ${event.prefecture}` : "",
     event.venue ? `会場: ${event.venue}` : "",
+    session ? `選択公演: ${sessionLabel}` : "",
     sessionDetails ? `公演時間: ${sessionDetails}` : "",
     event.ticketStatus ? `チケット: ${event.ticketStatus}` : "",
     ticketPeriod ? `受付期間: ${ticketPeriod}` : "",
@@ -231,7 +324,13 @@ function formatIcsDescription(event: CalendarEvent) {
     .join("\n");
 }
 
-function buildIcs(selectedEvents: CalendarEvent[]) {
+function getCalendarEntryUid(entry: CalendarExportEntry) {
+  return entry.sessionIndex === undefined
+    ? entry.event.id
+    : `${entry.event.id}-session-${entry.sessionIndex}`;
+}
+
+function buildIcs(entries: CalendarExportEntry[]) {
   const timestamp = formatIcsTimestamp(new Date());
   const lines = [
     "BEGIN:VCALENDAR",
@@ -239,19 +338,33 @@ function buildIcs(selectedEvents: CalendarEvent[]) {
     "PRODID:-//BAD-TERUMARU//Oshi Calendar//JA",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
+    "X-WR-TIMEZONE:Asia/Tokyo",
     "X-WR-CALNAME:推し活カレンダー（行きたい予定）",
-    ...selectedEvents.flatMap((event) => {
+    ...entries.flatMap((entry) => {
+      const { event, session } = entry;
       const location = [event.prefecture, event.venue].filter(Boolean).join(" / ");
-      const summary = `${ARTISTS[event.artist].label}｜${event.shortTitle}`;
+      const sessionLabel = session
+        ? `（${session.label ?? `${(entry.sessionIndex ?? 0) + 1}公演`}）`
+        : "";
+      const summary = `${ARTISTS[event.artist].label}｜${event.shortTitle}${sessionLabel}`;
+      const hasStartTime = isValidTime(session?.start);
+      const hasEndTime = hasStartTime && isValidTime(session?.end);
       const eventLines = [
         "BEGIN:VEVENT",
-        `UID:${event.id}@oshi-calendar.badterumaru.workers.dev`,
+        `UID:${getCalendarEntryUid(entry)}@oshi-calendar.badterumaru.workers.dev`,
         `DTSTAMP:${timestamp}`,
-        `DTSTART;VALUE=DATE:${formatIcsDate(event.startDate)}`,
-        `DTEND;VALUE=DATE:${formatIcsDate(getNextIsoDate(event.endDate ?? event.startDate))}`,
+        "SEQUENCE:0",
+        hasStartTime
+          ? `DTSTART;TZID=Asia/Tokyo:${formatIcsLocalDateTime(event.startDate, session?.start ?? "")}`
+          : `DTSTART;VALUE=DATE:${formatIcsDate(event.startDate)}`,
+        hasEndTime
+          ? `DTEND;TZID=Asia/Tokyo:${formatIcsLocalDateTime(event.startDate, session?.end ?? "")}`
+          : hasStartTime
+            ? ""
+            : `DTEND;VALUE=DATE:${formatIcsDate(getNextIsoDate(event.endDate ?? event.startDate))}`,
         `SUMMARY:${escapeIcsText(summary)}`,
         location ? `LOCATION:${escapeIcsText(location)}` : "",
-        `DESCRIPTION:${escapeIcsText(formatIcsDescription(event))}`,
+        `DESCRIPTION:${escapeIcsText(formatIcsDescription(entry))}`,
         event.officialUrl ? `URL:${event.officialUrl}` : "",
         "TRANSP:TRANSPARENT",
         "END:VEVENT",
@@ -303,6 +416,9 @@ function App() {
   const [visibleEventTypes, setVisibleEventTypes] =
     useState<Record<EventType, boolean>>(INITIAL_EVENT_TYPES);
   const [wantToGoIds, setWantToGoIds] = useState<string[]>(() => loadWantToGoIds());
+  const [exportedWantToGoKeys, setExportedWantToGoKeys] = useState<string[]>(() =>
+    loadExportedWantToGoKeys(),
+  );
 
   useEffect(() => {
     let isActive = true;
@@ -332,6 +448,19 @@ function App() {
     }
   }, [wantToGoIds]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      window.localStorage.setItem(
+        EXPORTED_WANT_TO_GO_STORAGE_KEY,
+        JSON.stringify(exportedWantToGoKeys),
+      );
+    } catch {
+      // Private browsing or storage restrictions should not block the calendar.
+    }
+  }, [exportedWantToGoKeys]);
+
   const calendarDays = useMemo(() => getCalendarDays(currentMonth), [currentMonth]);
   const visibleEvents = useMemo(
     () =>
@@ -354,9 +483,13 @@ function App() {
     return map;
   }, [calendarDays, visibleEvents]);
   const selectedEvents = eventsByDate.get(selectedDate) ?? [];
-  const wantedEvents = useMemo(
-    () => calendarEvents.filter((event) => wantToGoIds.includes(event.id)),
+  const wantedEntries = useMemo(
+    () => getWantToGoEntries(calendarEvents, wantToGoIds),
     [calendarEvents, wantToGoIds],
+  );
+  const pendingWantedEntries = useMemo(
+    () => wantedEntries.filter((entry) => !exportedWantToGoKeys.includes(entry.key)),
+    [exportedWantToGoKeys, wantedEntries],
   );
 
   function changeMonth(offset: number) {
@@ -393,17 +526,42 @@ function App() {
   }
 
   function toggleWantToGo(eventId: string) {
-    setWantToGoIds((current) =>
-      current.includes(eventId)
-        ? current.filter((id) => id !== eventId)
-        : [...current, eventId],
-    );
+    const event = calendarEvents.find((candidate) => candidate.id === eventId);
+    if (!event) return;
+
+    const selectionKeys = getEventSelectionKeys(event);
+    setWantToGoIds((current) => {
+      const isSelected = isEventWantToGo(current, event);
+      const withoutEvent = current.filter(
+        (key) => key !== event.id && !selectionKeys.includes(key),
+      );
+      return isSelected ? withoutEvent : [...withoutEvent, ...selectionKeys];
+    });
+  }
+
+  function toggleSessionWantToGo(eventId: string, sessionIndex: number) {
+    const event = calendarEvents.find((candidate) => candidate.id === eventId);
+    if (!event?.sessions?.[sessionIndex]) return;
+
+    const selectionKey = getSessionSelectionKey(event, sessionIndex);
+    const selectionKeys = getEventSelectionKeys(event);
+    setWantToGoIds((current) => {
+      const next = new Set(current.filter((key) => key !== event.id));
+      if (current.includes(event.id)) selectionKeys.forEach((key) => next.add(key));
+
+      if (next.has(selectionKey)) next.delete(selectionKey);
+      else next.add(selectionKey);
+
+      return Array.from(next);
+    });
   }
 
   function exportWantToGo() {
-    if (!wantedEvents.length) return;
+    if (!pendingWantedEntries.length) return;
 
-    const blob = new Blob([buildIcs(wantedEvents)], { type: "text/calendar;charset=utf-8" });
+    const blob = new Blob([buildIcs(pendingWantedEntries)], {
+      type: "text/calendar;charset=utf-8",
+    });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -412,6 +570,9 @@ function App() {
     anchor.click();
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
+
+    const exportedKeys = pendingWantedEntries.map((entry) => entry.key);
+    setExportedWantToGoKeys((current) => Array.from(new Set([...current, ...exportedKeys])));
   }
 
   const availableEventTypes = EVENT_FILTER_ORDER.filter((eventType) =>
@@ -419,6 +580,11 @@ function App() {
   );
   const hasAllEventTypes =
     availableEventTypes.length > 0 && availableEventTypes.every((eventType) => visibleEventTypes[eventType]);
+  const exportButtonLabel = !wantedEntries.length
+    ? "カレンダーへ追加"
+    : pendingWantedEntries.length
+      ? `カレンダーへ追加（${pendingWantedEntries.length}件）`
+      : "書き出し済み";
 
   return (
     <div className="app-shell">
@@ -515,16 +681,22 @@ function App() {
               <div className="calendar-heading-meta">
                 <span className="event-count">{visibleEvents.length}件の登録</span>
                 <span className="want-to-go-count" aria-live="polite">
-                  {wantedEvents.length}件 行きたい
+                  {wantedEntries.length}件 行きたい
                 </span>
                 <button
                   className="export-calendar-button"
                   type="button"
                   onClick={exportWantToGo}
-                  disabled={!wantedEvents.length}
-                  title={wantedEvents.length ? undefined : "詳細画面で「行きたい」を選択してください"}
+                  disabled={!pendingWantedEntries.length}
+                  title={
+                    !wantedEntries.length
+                      ? "詳細画面で「行きたい」を選択してください"
+                      : pendingWantedEntries.length
+                        ? "未書き出しの予定だけを追加します"
+                        : "同じ予定は再度書き出しません。新しい予定を選択してください"
+                  }
                 >
-                  カレンダーへ追加
+                  {exportButtonLabel}
                 </button>
               </div>
             </div>
@@ -579,7 +751,7 @@ function App() {
               })}
             </div>
             <p className="calendar-footnote">
-              ※ 赤字は日曜・祝日です。期間イベントは開催期間中の日付に表示しています。「行きたい」を選んだ予定は「カレンダーへ追加」から終日予定として書き出せます（公演時間は説明欄に記載）。
+              ※ 赤字は日曜・祝日です。期間イベントは開催期間中の日付に表示しています。「行きたい」を選んだ公演だけを、未書き出し分からカレンダーへ追加できます。終了時刻が未確認の公演は開始時刻のみで出力します。
             </p>
           </section>
 
@@ -597,8 +769,12 @@ function App() {
                 {selectedEvents.map((event) => (
                   <EventDetailCard
                     event={event}
-                    isWanted={wantToGoIds.includes(event.id)}
+                    isWanted={isEventWantToGo(wantToGoIds, event)}
                     onToggleWantToGo={toggleWantToGo}
+                    isSessionWanted={(sessionIndex) =>
+                      isSessionWantToGo(wantToGoIds, event, sessionIndex)
+                    }
+                    onToggleSessionWantToGo={toggleSessionWantToGo}
                     key={event.id}
                   />
                 ))}
@@ -630,12 +806,20 @@ function EventDetailCard({
   event,
   isWanted,
   onToggleWantToGo,
+  isSessionWanted,
+  onToggleSessionWantToGo,
 }: {
   event: CalendarEvent;
   isWanted: boolean;
   onToggleWantToGo: (eventId: string) => void;
+  isSessionWanted: (sessionIndex: number) => boolean;
+  onToggleSessionWantToGo: (eventId: string, sessionIndex: number) => void;
 }) {
   const artist = ARTISTS[event.artist];
+  const hasMultipleSessions = (event.sessions?.length ?? 0) > 1;
+  const isPerformance = ["concert", "birthday", "fc", "stage"].includes(event.eventType);
+  const startLabel = isPerformance ? "開演" : "開始";
+  const endLabel = isPerformance ? "終演" : "終了";
   return (
     <article className="detail-card" style={eventStyle(event.artist)}>
       <div className="detail-card-topline">
@@ -651,9 +835,10 @@ function EventDetailCard({
             type="checkbox"
             checked={isWanted}
             onChange={() => onToggleWantToGo(event.id)}
+            aria-label={`${event.shortTitle}${hasMultipleSessions ? "の全公演" : ""}を行きたい`}
           />
           <span className="want-to-go-box" aria-hidden="true" />
-          <span>行きたい</span>
+          <span>{hasMultipleSessions ? "全公演" : "行きたい"}</span>
         </label>
       </div>
       <h3>{event.title}</h3>
@@ -699,17 +884,37 @@ function EventDetailCard({
       {event.sessions?.length && (
         <div className="sessions-block">
           <div className="subheading">
-            <span>TIME TABLE</span>
-            <strong>公演時間</strong>
+            <div className="subheading-title">
+              <span>TIME TABLE</span>
+              <strong>公演時間</strong>
+            </div>
+            {hasMultipleSessions && <span className="session-selection-note">行きたい公演を選択</span>}
           </div>
           <div className="sessions-list">
             {event.sessions.map((session, index) => (
               <div className="session-row" key={`${event.id}-${session.label ?? index}`}>
-                <span className="session-label">{session.label ?? `${index + 1}公演`}</span>
+                {hasMultipleSessions ? (
+                  <label className={`session-choice ${isSessionWanted(index) ? "is-checked" : ""}`}>
+                    <input
+                      type="checkbox"
+                      checked={isSessionWanted(index)}
+                      onChange={() => onToggleSessionWantToGo(event.id, index)}
+                      aria-label={`${event.shortTitle} ${session.label ?? `${index + 1}公演`}を行きたい`}
+                    />
+                    <span className="session-check-box" aria-hidden="true" />
+                    <span className="session-label">{session.label ?? `${index + 1}公演`}</span>
+                  </label>
+                ) : (
+                  <span className="session-label">{session.label ?? `${index + 1}公演`}</span>
+                )}
                 <span>
                   {session.doors && <>開場 <strong>{session.doors}</strong></>}
                   {session.doors && session.start && <span className="time-separator">/</span>}
-                  {session.start && <>開演 <strong>{session.start}</strong></>}
+                  {session.start && <>{startLabel} <strong>{session.start}</strong></>}
+                  {session.end && (session.doors || session.start) && (
+                    <span className="time-separator">/</span>
+                  )}
+                  {session.end && <>{endLabel} <strong>{session.end}</strong></>}
                 </span>
               </div>
             ))}
