@@ -230,10 +230,27 @@ function App() {
   }
 
   function toggleEventType(eventType: EventType) {
-    setVisibleEventTypes((current) => ({ ...current, [eventType]: !current[eventType] }));
+    setVisibleEventTypes((current) => {
+      const allSelected = EVENT_FILTER_ORDER.every((type) => current[type]);
+      const next = { ...current };
+
+      if (allSelected) {
+        (Object.keys(next) as EventType[]).forEach((type) => {
+          next[type] = type === eventType;
+        });
+      } else {
+        next[eventType] = !current[eventType];
+      }
+
+      return next;
+    });
   }
 
-  const hasAllEventTypes = EVENT_FILTER_ORDER.every((eventType) => visibleEventTypes[eventType]);
+  const availableEventTypes = EVENT_FILTER_ORDER.filter((eventType) =>
+    calendarEvents.some((event) => event.eventType === eventType),
+  );
+  const hasAllEventTypes =
+    availableEventTypes.length > 0 && availableEventTypes.every((eventType) => visibleEventTypes[eventType]);
 
   return (
     <div className="app-shell">
@@ -305,9 +322,7 @@ function App() {
               >
                 すべて
               </button>
-              {EVENT_FILTER_ORDER.filter((eventType) =>
-                calendarEvents.some((event) => event.eventType === eventType),
-              ).map((eventType) => (
+              {availableEventTypes.map((eventType) => (
                 <button
                   className={`type-filter-button ${visibleEventTypes[eventType] ? "is-active" : ""}`}
                   key={eventType}
