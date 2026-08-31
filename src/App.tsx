@@ -575,6 +575,14 @@ function App() {
     setExportedWantToGoKeys((current) => Array.from(new Set([...current, ...exportedKeys])));
   }
 
+  function resetWantToGo() {
+    if (!wantToGoIds.length && !exportedWantToGoKeys.length) return;
+    if (!window.confirm("「行きたい」と書き出し履歴をすべてリセットしますか？")) return;
+
+    setWantToGoIds([]);
+    setExportedWantToGoKeys([]);
+  }
+
   const availableEventTypes = EVENT_FILTER_ORDER.filter((eventType) =>
     calendarEvents.some((event) => event.eventType === eventType),
   );
@@ -585,6 +593,7 @@ function App() {
     : pendingWantedEntries.length
       ? `カレンダーへ追加（${pendingWantedEntries.length}件）`
       : "書き出し済み";
+  const hasWantToGoData = wantToGoIds.length > 0 || exportedWantToGoKeys.length > 0;
 
   return (
     <div className="app-shell">
@@ -697,6 +706,15 @@ function App() {
                   }
                 >
                   {exportButtonLabel}
+                </button>
+                <button
+                  className="reset-want-to-go-button"
+                  type="button"
+                  onClick={resetWantToGo}
+                  disabled={!hasWantToGoData}
+                  title="選択状態と書き出し履歴をすべて消去します"
+                >
+                  リセット
                 </button>
               </div>
             </div>

@@ -395,6 +395,32 @@ button {
   outline-offset: 2px;
 }
 
+.reset-want-to-go-button {
+  padding: 6px 2px;
+  border: 0;
+  background: transparent;
+  color: #9aa4b4;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.reset-want-to-go-button:hover:not(:disabled) {
+  color: #c04c59;
+  text-decoration: underline;
+}
+
+.reset-want-to-go-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.reset-want-to-go-button:focus-visible {
+  border-radius: 5px;
+  outline: 3px solid rgba(37, 99, 235, 0.18);
+  outline-offset: 2px;
+}
+
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
