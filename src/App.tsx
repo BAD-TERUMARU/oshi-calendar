@@ -173,7 +173,12 @@ function App() {
 
   const calendarDays = useMemo(() => getCalendarDays(currentMonth), [currentMonth]);
   const visibleEvents = useMemo(
-    () => calendarEvents.filter((event) => visibleArtists[event.artist] && visibleEventTypes[event.eventType]),
+    () =>
+      calendarEvents.filter(
+        (event) =>
+          (event.artists ?? [event.artist]).some((artist) => visibleArtists[artist]) &&
+          visibleEventTypes[event.eventType],
+      ),
     [calendarEvents, visibleArtists, visibleEventTypes],
   );
   const eventsByDate = useMemo(() => {
@@ -220,9 +225,9 @@ function App() {
             <h1>推し活カレンダー</h1>
             <p>3組の予定を、ひとつのカレンダーに。</p>
           </div>
-          <div className="header-note" aria-label="2026年8月22日時点の公開情報スナップショット">
+          <div className="header-note" aria-label="2026年8月31日時点の公開情報スナップショット">
             <span className="live-dot" />
-            <span>SNAPSHOT 2026.08.22</span>
+            <span>SNAPSHOT 2026.08.31</span>
           </div>
         </div>
       </header>
@@ -385,7 +390,7 @@ function App() {
 
       <footer className="app-footer">
         <span>推し活カレンダー｜非公式ファン作成</span>
-        <span>公開情報スナップショット：2026年8月22日時点</span>
+        <span>公開情報スナップショット：2026年8月31日時点</span>
         <span>最新情報・受付条件は公式ページをご確認ください</span>
         <p className="app-footer-warning">
           このアプリは公式運営とは関係ありません。掲載情報の利用・転載は各公式サイトの規約・権利条件に従ってください。

@@ -12,6 +12,7 @@ export type EventType =
   | "other";
 
 export type TicketStatus =
+  | "無料"
   | "受付前"
   | "受付中"
   | "当日券受付中"
@@ -30,6 +31,8 @@ export interface EventSession {
 export interface CalendarEvent {
   id: string;
   artist: ArtistId;
+  /** 複数組が出演するイベントは、主催元の掲載順などに応じて補助的に指定します。 */
+  artists?: ArtistId[];
   title: string;
   shortTitle: string;
   startDate: string;
