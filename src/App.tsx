@@ -57,7 +57,7 @@ const INITIAL_EVENT_TYPES: Record<EventType, boolean> = {
   other: true,
 };
 
-const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
+const WEEKDAYS = ["月", "火", "水", "木", "金", "土", "日"];
 const JAPANESE_HOLIDAYS: Record<string, string> = {
   "2026-01-01": "元日",
   "2026-01-12": "成人の日",
@@ -96,7 +96,8 @@ function parseIsoDate(value: string) {
 function getCalendarDays(month: Date) {
   const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
   const gridStart = new Date(firstDay);
-  gridStart.setDate(firstDay.getDate() - firstDay.getDay());
+  const mondayBasedDay = (firstDay.getDay() + 6) % 7;
+  gridStart.setDate(firstDay.getDate() - mondayBasedDay);
 
   return Array.from({ length: 42 }, (_, index) => {
     const date = new Date(gridStart);
@@ -364,7 +365,7 @@ function App() {
                 const isSelected = key === selectedDate;
                 const holidayName = JAPANESE_HOLIDAYS[key];
                 const isHoliday = Boolean(holidayName);
-                const weekday = date.getDay();
+                const weekday = (date.getDay() + 6) % 7;
                 return (
                   <button
                     className={`day-cell ${!isCurrentMonth ? "is-outside" : ""} ${

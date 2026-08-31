@@ -370,14 +370,14 @@ button {
   text-align: left;
 }
 
-.weekday-0,
-.day-number.weekday-0 {
-  color: #df5a62;
+.weekday-5,
+.day-number.weekday-5 {
+  color: #3c77d8;
 }
 
 .weekday-6,
 .day-number.weekday-6 {
-  color: #3c77d8;
+  color: #df5a62;
 }
 
 .weekday:nth-child(7n) {
