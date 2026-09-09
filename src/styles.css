@@ -1190,6 +1190,35 @@ button {
   }
 }
 
+.view-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; }
+.view-controls label { display: flex; gap: 6px; align-items: center; font-size: 13px; min-height: 40px; }
+.notice { padding: 12px; border-radius: 8px; background: #fff7e6; color: #614314; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.export-management { margin-bottom: 16px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; font-size: 12px; line-height: 1.7; }
+.export-management summary { cursor: pointer; font-weight: 600; min-height: 24px; }
+.export-management button, .personal-end button { background: white; border: 1px solid var(--line); border-radius: 7px; padding: 8px 12px; margin: 4px 8px 4px 0; cursor: pointer; font: inherit; }
+.export-management button:disabled { opacity: .45; cursor: not-allowed; }
+.event-list { display: grid; gap: 10px; }
+.event-list-item { display: grid; gap: 5px; width: 100%; text-align: left; border: 1px solid var(--line); border-left: 4px solid var(--event-color); background: white; padding: 14px; border-radius: 8px; font: inherit; cursor: pointer; overflow-wrap: anywhere; }
+.event-list-item:hover { background: var(--event-soft); }
+.event-list-item strong { font-size: 15px; }
+.event-list-item span { font-size: 13px; }
+.event-list-item small { font-size: 12px; color: #58667a; }
+.list-location { font-weight: 700; color: var(--event-color); }
+.checked-at { font-size: 12px; color: #58667a; line-height: 1.7; }
+.personal-end { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; padding-top: 8px; font-size: 12px; }
+.personal-end input { font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 6px; max-width: 100%; }
+.personal-end small { width: 100%; color: #58667a; line-height: 1.6; }
+.session-row { flex-wrap: wrap; }
+.period-choices { font-size: 12px; line-height: 1.7; margin: 16px 0; }
+.period-choices > div { display: flex; gap: 8px; flex-wrap: wrap; }
+.period-choices label { display: flex; align-items: center; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; }
+button:focus-visible, summary:focus-visible, input:focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+@media (max-width: 640px) {
+  .card-heading { flex-wrap: wrap; gap: 12px; }
+  .view-controls button, .export-management button { min-height: 44px; }
+  .calendar-footnote { font-size: 11px; line-height: 1.7; }
+}
+
 @media (max-width: 390px) {
   .event-chip {
     font-size: 7px;

@@ -23,6 +23,10 @@ export type TicketStatus =
   | "未発表";
 
 export interface EventSession {
+  /** 一度割り当てたIDは、並べ替え・追加後も変更しません。 */
+  readonly id: string;
+  /** イベント開始日と異なる実開催日が判明した将来セッション用。 */
+  date?: string;
   label?: string;
   doors?: string;
   start?: string;
@@ -50,4 +54,9 @@ export interface CalendarEvent {
   ticketStatus?: TicketStatus;
   ticketSalesDate?: string;
   ticketSalesEndDate?: string;
+  checkedAt?: string;
+  ticketCheckedAt?: string;
+  ticketSourceUrl?: string;
+  ticketSalesStartTime?: string;
+  ticketSalesEndTime?: string;
 }

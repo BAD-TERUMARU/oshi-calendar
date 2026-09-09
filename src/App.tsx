@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { events } from "./data/events";
 import type { ArtistId, CalendarEvent, EventType } from "./types";
+import { toIsoDate, parseIsoDate, getCalendarDays, isDateInEvent, formatMonth, formatLongDate, formatShortDate, formatRange, getSessionSelectionKey, getEventSelectionKeys, isEventWantToGo, isSessionWantToGo, getWantToGoEntries, buildIcs, getTicketDisplay, getJstToday, getEntryFingerprint, withPersonalEnds, getPeriodDates, type CalendarExportEntry } from "./calendar";
+import { JAPANESE_HOLIDAYS } from "./data/holidays";
+import { SNAPSHOT_DATE } from "./data/metadata";
+import { isWantedOnDate } from "./calendar";
 
 const ARTISTS: Record<ArtistId, { label: string; color: string; soft: string; mark: string }> = {
   ocha: { label: "OCHA NORMA", color: "#16a34a", soft: "#eaf8ef", mark: "O" },
@@ -58,90 +62,31 @@ const INITIAL_EVENT_TYPES: Record<EventType, boolean> = {
 };
 
 const WEEKDAYS = ["月", "火", "水", "木", "金", "土", "日"];
-const JAPANESE_HOLIDAYS: Record<string, string> = {
-  "2026-01-01": "元日",
-  "2026-01-12": "成人の日",
-  "2026-02-11": "建国記念の日",
-  "2026-02-23": "天皇誕生日",
-  "2026-03-20": "春分の日",
-  "2026-04-29": "昭和の日",
-  "2026-05-03": "憲法記念日",
-  "2026-05-04": "みどりの日",
-  "2026-05-05": "こどもの日",
-  "2026-05-06": "休日（振替休日）",
-  "2026-07-20": "海の日",
-  "2026-08-11": "山の日",
-  "2026-09-21": "敬老の日",
-  "2026-09-22": "休日（国民の休日）",
-  "2026-09-23": "秋分の日",
-  "2026-10-12": "スポーツの日",
-  "2026-11-03": "文化の日",
-  "2026-11-23": "勤労感謝の日",
-};
-const INITIAL_MONTH = new Date(2026, 8, 1);
-const INITIAL_DATE = "2026-09-04";
 const WANT_TO_GO_STORAGE_KEY = "oshi-calendar-want-to-go";
 const EXPORTED_WANT_TO_GO_STORAGE_KEY = "oshi-calendar-exported-want-to-go";
+const EXPORT_RECORDS_KEY = "oshi-calendar-export-records-v2";
+const PERSONAL_ENDS_KEY = "oshi-calendar-personal-ends";
+const LAST_EXPORT_KEY = "oshi-calendar-last-export";
 
-type CalendarExportEntry = {
-  key: string;
-  event: CalendarEvent;
-  session?: NonNullable<CalendarEvent["sessions"]>[number];
-  sessionIndex?: number;
-};
-
-function toIsoDate(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+function loadStringRecord(key: string): Record<string, string> {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(key) ?? "{}");
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    return Object.fromEntries(Object.entries(value).filter(([, item]) => typeof item === "string"));
+  } catch { return {}; }
 }
 
-function parseIsoDate(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  return new Date(year, month - 1, day);
+function downloadIcs(content: string, filename: string) {
+  const url = URL.createObjectURL(new Blob([content], { type: "text/calendar;charset=utf-8" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-function getCalendarDays(month: Date) {
-  const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
-  const gridStart = new Date(firstDay);
-  const mondayBasedDay = (firstDay.getDay() + 6) % 7;
-  gridStart.setDate(firstDay.getDate() - mondayBasedDay);
-
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(gridStart);
-    date.setDate(gridStart.getDate() + index);
-    return date;
-  });
-}
-
-function isDateInEvent(date: string, event: CalendarEvent) {
-  return date >= event.startDate && date <= (event.endDate ?? event.startDate);
-}
-
-function formatMonth(date: Date) {
-  return `${date.getFullYear()}年${date.getMonth() + 1}月`;
-}
-
-function formatLongDate(value: string) {
-  return new Intl.DateTimeFormat("ja-JP", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    weekday: "short",
-  }).format(parseIsoDate(value));
-}
-
-function formatShortDate(value: string) {
-  const date = parseIsoDate(value);
-  return `${date.getMonth() + 1}/${date.getDate()}`;
-}
-
-function formatRange(event: CalendarEvent) {
-  return event.endDate
-    ? `${formatShortDate(event.startDate)}〜${formatShortDate(event.endDate)}`
-    : formatShortDate(event.startDate);
-}
 
 function loadWantToGoIds() {
   if (typeof window === "undefined") return [];
@@ -175,207 +120,6 @@ function loadExportedWantToGoKeys() {
   }
 }
 
-function getSessionSelectionKey(event: CalendarEvent, sessionIndex: number) {
-  return `${event.id}::session-${sessionIndex}`;
-}
-
-function getEventSelectionKeys(event: CalendarEvent) {
-  return event.sessions?.length
-    ? event.sessions.map((_, index) => getSessionSelectionKey(event, index))
-    : [event.id];
-}
-
-function isEventWantToGo(selectedKeys: string[], event: CalendarEvent) {
-  if (selectedKeys.includes(event.id)) return true;
-  const selectionKeys = getEventSelectionKeys(event);
-  return selectionKeys.every((key) => selectedKeys.includes(key));
-}
-
-function isSessionWantToGo(selectedKeys: string[], event: CalendarEvent, sessionIndex: number) {
-  return (
-    selectedKeys.includes(event.id) ||
-    selectedKeys.includes(getSessionSelectionKey(event, sessionIndex))
-  );
-}
-
-function getWantToGoEntries(calendarEvents: CalendarEvent[], selectedKeys: string[]) {
-  return calendarEvents.flatMap<CalendarExportEntry>((event) => {
-    if (event.sessions?.length) {
-      const legacyEventSelection = selectedKeys.includes(event.id);
-      return event.sessions.flatMap((session, sessionIndex) => {
-        const key = getSessionSelectionKey(event, sessionIndex);
-        if (!legacyEventSelection && !selectedKeys.includes(key)) return [];
-        return [{ key, event, session, sessionIndex }];
-      });
-    }
-
-    return selectedKeys.includes(event.id) ? [{ key: event.id, event }] : [];
-  });
-}
-
-function getNextIsoDate(value: string) {
-  const nextDate = parseIsoDate(value);
-  nextDate.setDate(nextDate.getDate() + 1);
-  return toIsoDate(nextDate);
-}
-
-function formatIcsDate(value: string) {
-  return value.replace(/-/g, "");
-}
-
-function formatIcsTimestamp(value: Date) {
-  return value.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
-}
-
-function isValidTime(value: string | undefined): value is string {
-  if (!value) return false;
-  const match = /^(\d{1,2}):(\d{2})$/.exec(value);
-  if (!match) return false;
-  const hour = Number(match[1]);
-  const minute = Number(match[2]);
-  return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
-}
-
-function formatIcsLocalDateTime(date: string, time: string) {
-  const [hour, minute] = time.split(":").map(Number);
-  return `${formatIcsDate(date)}T${String(hour).padStart(2, "0")}${String(minute).padStart(2, "0")}00`;
-}
-
-function escapeIcsText(value: string) {
-  return value
-    .replace(/\\/g, "\\\\")
-    .replace(/\r?\n/g, "\\n")
-    .replace(/;/g, "\\;")
-    .replace(/,/g, "\\,");
-}
-
-function foldIcsLine(line: string) {
-  const encoder = new TextEncoder();
-  const chunks: string[] = [];
-  let chunk = "";
-  let byteLength = 0;
-
-  for (const character of line) {
-    const characterLength = encoder.encode(character).length;
-    const byteLimit = chunks.length ? 74 : 75;
-
-    if (chunk && byteLength + characterLength > byteLimit) {
-      chunks.push(chunk);
-      chunk = ` ${character}`;
-      byteLength = 1 + characterLength;
-    } else {
-      chunk += character;
-      byteLength += characterLength;
-    }
-  }
-
-  if (chunk || !chunks.length) chunks.push(chunk);
-  return chunks.join("\r\n");
-}
-
-function formatSessionDetails(
-  session: NonNullable<CalendarEvent["sessions"]>[number],
-  index: number,
-  eventType: EventType,
-) {
-  const label = session.label ?? `${index + 1}公演`;
-  const isPerformance = ["concert", "birthday", "fc", "stage"].includes(eventType);
-  const startLabel = isPerformance ? "開演" : "開始";
-  const endLabel = isPerformance ? "終演" : "終了";
-  const times = [
-    session.doors ? `開場 ${session.doors}` : "",
-    session.start ? `${startLabel} ${session.start}` : "",
-    session.end ? `${endLabel} ${session.end}` : "",
-  ]
-    .filter(Boolean)
-    .join(" / ");
-  return [label, times].filter(Boolean).join(" ");
-}
-
-function formatIcsDescription(entry: CalendarExportEntry) {
-  const { event, session, sessionIndex } = entry;
-  const sessionLabel = session
-    ? session.label ?? `${(sessionIndex ?? 0) + 1}公演`
-    : "";
-  const sessionDetails = session
-    ? formatSessionDetails(session, sessionIndex ?? 0, event.eventType)
-    : event.sessions
-      ?.map((eventSession, index) => formatSessionDetails(eventSession, index, event.eventType))
-      .join("、");
-  const ticketPeriod = event.ticketSalesDate
-    ? `${formatShortDate(event.ticketSalesDate)}〜${
-        event.ticketSalesEndDate ? formatShortDate(event.ticketSalesEndDate) : ""
-      }`
-    : "";
-
-  return [
-    `正式名称: ${event.title}`,
-    `開催日: ${formatRange(event)}`,
-    event.prefecture ? `場所: ${event.prefecture}` : "",
-    event.venue ? `会場: ${event.venue}` : "",
-    session ? `選択公演: ${sessionLabel}` : "",
-    sessionDetails ? `公演時間: ${sessionDetails}` : "",
-    event.ticketStatus ? `チケット: ${event.ticketStatus}` : "",
-    ticketPeriod ? `受付期間: ${ticketPeriod}` : "",
-    event.notes ?? "",
-    event.officialUrl ? `公式情報: ${event.officialUrl}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function getCalendarEntryUid(entry: CalendarExportEntry) {
-  return entry.sessionIndex === undefined
-    ? entry.event.id
-    : `${entry.event.id}-session-${entry.sessionIndex}`;
-}
-
-function buildIcs(entries: CalendarExportEntry[]) {
-  const timestamp = formatIcsTimestamp(new Date());
-  const lines = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//BAD-TERUMARU//Oshi Calendar//JA",
-    "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
-    "X-WR-TIMEZONE:Asia/Tokyo",
-    "X-WR-CALNAME:推し活カレンダー（行きたい予定）",
-    ...entries.flatMap((entry) => {
-      const { event, session } = entry;
-      const location = [event.prefecture, event.venue].filter(Boolean).join(" / ");
-      const sessionLabel = session
-        ? `（${session.label ?? `${(entry.sessionIndex ?? 0) + 1}公演`}）`
-        : "";
-      const summary = `${ARTISTS[event.artist].label}｜${event.shortTitle}${sessionLabel}`;
-      const hasStartTime = isValidTime(session?.start);
-      const hasEndTime = hasStartTime && isValidTime(session?.end);
-      const eventLines = [
-        "BEGIN:VEVENT",
-        `UID:${getCalendarEntryUid(entry)}@oshi-calendar.badterumaru.workers.dev`,
-        `DTSTAMP:${timestamp}`,
-        "SEQUENCE:0",
-        hasStartTime
-          ? `DTSTART;TZID=Asia/Tokyo:${formatIcsLocalDateTime(event.startDate, session?.start ?? "")}`
-          : `DTSTART;VALUE=DATE:${formatIcsDate(event.startDate)}`,
-        hasEndTime
-          ? `DTEND;TZID=Asia/Tokyo:${formatIcsLocalDateTime(event.startDate, session?.end ?? "")}`
-          : hasStartTime
-            ? ""
-            : `DTEND;VALUE=DATE:${formatIcsDate(getNextIsoDate(event.endDate ?? event.startDate))}`,
-        `SUMMARY:${escapeIcsText(summary)}`,
-        location ? `LOCATION:${escapeIcsText(location)}` : "",
-        `DESCRIPTION:${escapeIcsText(formatIcsDescription(entry))}`,
-        event.officialUrl ? `URL:${event.officialUrl}` : "",
-        "TRANSP:TRANSPARENT",
-        "END:VEVENT",
-      ];
-      return eventLines.filter(Boolean);
-    }),
-    "END:VCALENDAR",
-  ];
-
-  return `${lines.map(foldIcsLine).join("\r\n")}\r\n`;
-}
 
 function eventStyle(artist: ArtistId) {
   return {
@@ -384,30 +128,27 @@ function eventStyle(artist: ArtistId) {
   } as CSSProperties;
 }
 
-function isCalendarEvent(value: unknown): value is CalendarEvent {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<CalendarEvent>;
-  return (
-    typeof candidate.id === "string" &&
-    (candidate.artist === "ocha" || candidate.artist === "morning" || candidate.artist === "karin") &&
-    typeof candidate.title === "string" &&
-    typeof candidate.startDate === "string" &&
-    typeof candidate.eventType === "string" &&
-    typeof candidate.ticketStatus === "string"
-  );
-}
-
-function parseRemoteEvents(value: unknown) {
-  if (!value || typeof value !== "object") return null;
-  const candidate = value as { events?: unknown };
-  if (!Array.isArray(candidate.events) || !candidate.events.every(isCalendarEvent)) return null;
-  return candidate.events;
-}
 
 function App() {
-  const [currentMonth, setCurrentMonth] = useState(INITIAL_MONTH);
-  const [selectedDate, setSelectedDate] = useState(INITIAL_DATE);
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(events);
+  const [now, setNow] = useState(() => new Date());
+  const today = getJstToday(now);
+  const [currentMonth, setCurrentMonth] = useState(() => parseIsoDate(getJstToday()));
+  const [selectedDate, setSelectedDate] = useState(() => getJstToday());
+  const calendarEvents = events;
+  const [view, setView] = useState<"month" | "list">("month");
+  const [wantedOnly, setWantedOnly] = useState(false);
+  const [storageWarning, setStorageWarning] = useState(false);
+  const [exportMessage, setExportMessage] = useState("");
+  const [personalEnds, setPersonalEnds] = useState(() => loadStringRecord(PERSONAL_ENDS_KEY));
+  const [lastExport, setLastExport] = useState(() => loadStringRecord(LAST_EXPORT_KEY));
+  const [exportRecords, setExportRecords] = useState(() => {
+    const saved = loadStringRecord(EXPORT_RECORDS_KEY);
+    const legacy = loadExportedWantToGoKeys();
+    for (const entry of getWantToGoEntries(events, legacy)) {
+      if (!saved[entry.key]) saved[entry.key] = getEntryFingerprint(entry);
+    }
+    return saved;
+  });
   const [visibleArtists, setVisibleArtists] = useState<Record<ArtistId, boolean>>({
     ocha: true,
     morning: true,
@@ -421,22 +162,17 @@ function App() {
   );
 
   useEffect(() => {
-    let isActive = true;
-
-    fetch("/api/events", { headers: { Accept: "application/json" } })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((payload: unknown) => {
-        const remoteEvents = parseRemoteEvents(payload);
-        if (isActive && remoteEvents?.length) setCalendarEvents(remoteEvents);
-      })
-      .catch(() => {
-        // The bundled snapshot remains available when the API is not deployed yet.
-      });
-
-    return () => {
-      isActive = false;
-    };
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(EXPORT_RECORDS_KEY, JSON.stringify(exportRecords));
+      localStorage.setItem(PERSONAL_ENDS_KEY, JSON.stringify(personalEnds));
+      localStorage.setItem(LAST_EXPORT_KEY, JSON.stringify(lastExport));
+    } catch { setStorageWarning(true); }
+  }, [exportRecords, personalEnds, lastExport]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -444,7 +180,7 @@ function App() {
     try {
       window.localStorage.setItem(WANT_TO_GO_STORAGE_KEY, JSON.stringify(wantToGoIds));
     } catch {
-      // Private browsing or storage restrictions should not block the calendar.
+      setStorageWarning(true);
     }
   }, [wantToGoIds]);
 
@@ -457,7 +193,7 @@ function App() {
         JSON.stringify(exportedWantToGoKeys),
       );
     } catch {
-      // Private browsing or storage restrictions should not block the calendar.
+      setStorageWarning(true);
     }
   }, [exportedWantToGoKeys]);
 
@@ -467,9 +203,10 @@ function App() {
       calendarEvents.filter(
         (event) =>
           (event.artists ?? [event.artist]).some((artist) => visibleArtists[artist]) &&
-          visibleEventTypes[event.eventType],
+          visibleEventTypes[event.eventType] &&
+          (!wantedOnly || wantToGoIds.includes(event.id) || getEventSelectionKeys(event).some((key) => wantToGoIds.includes(key))),
       ),
-    [calendarEvents, visibleArtists, visibleEventTypes],
+    [calendarEvents, visibleArtists, visibleEventTypes, wantedOnly, wantToGoIds],
   );
   const eventsByDate = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
@@ -477,20 +214,27 @@ function App() {
       const key = toIsoDate(date);
       map.set(
         key,
-        visibleEvents.filter((event) => isDateInEvent(key, event)),
+        visibleEvents.filter((event) => isDateInEvent(key, event) && (!wantedOnly || isWantedOnDate(event, wantToGoIds, key))),
       );
     });
     return map;
-  }, [calendarDays, visibleEvents]);
+  }, [calendarDays, visibleEvents, wantedOnly, wantToGoIds]);
   const selectedEvents = eventsByDate.get(selectedDate) ?? [];
   const wantedEntries = useMemo(
-    () => getWantToGoEntries(calendarEvents, wantToGoIds),
-    [calendarEvents, wantToGoIds],
+    () => withPersonalEnds(getWantToGoEntries(calendarEvents, wantToGoIds), personalEnds),
+    [calendarEvents, wantToGoIds, personalEnds],
   );
   const pendingWantedEntries = useMemo(
-    () => wantedEntries.filter((entry) => !exportedWantToGoKeys.includes(entry.key)),
-    [exportedWantToGoKeys, wantedEntries],
+    () => wantedEntries.filter((entry) => !exportedWantToGoKeys.includes(entry.key) && !exportRecords[entry.key]),
+    [exportedWantToGoKeys, wantedEntries, exportRecords],
   );
+  const changedWantedEntries = wantedEntries.filter((entry) => exportRecords[entry.key] && exportRecords[entry.key] !== getEntryFingerprint(entry));
+  const monthStart = toIsoDate(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1));
+  const monthEnd = toIsoDate(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0));
+  const monthEvents = visibleEvents.filter((event) => event.startDate <= monthEnd && (event.endDate ?? event.startDate) >= monthStart &&
+    (!wantedOnly || wantedEntries.some((entry) => entry.event.id === event.id && entry.date! >= monthStart && entry.date! <= monthEnd)))
+    .sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const legacyPeriods = calendarEvents.filter((event) => event.endDate && !event.sessions?.length && wantToGoIds.includes(event.id));
 
   function changeMonth(offset: number) {
     const nextMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + offset, 1);
@@ -499,9 +243,9 @@ function App() {
   }
 
   function goToToday() {
-    const today = new Date();
-    setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1));
-    setSelectedDate(toIsoDate(today));
+    const date = getJstToday();
+    setCurrentMonth(parseIsoDate(date));
+    setSelectedDate(date);
   }
 
   function toggleArtist(artist: ArtistId) {
@@ -510,7 +254,7 @@ function App() {
 
   function toggleEventType(eventType: EventType) {
     setVisibleEventTypes((current) => {
-      const allSelected = EVENT_FILTER_ORDER.every((type) => current[type]);
+      const allSelected = availableEventTypes.every((type) => current[type]);
       const next = { ...current };
 
       if (allSelected) {
@@ -556,31 +300,40 @@ function App() {
     });
   }
 
-  function exportWantToGo() {
-    if (!pendingWantedEntries.length) return;
-
-    const blob = new Blob([buildIcs(pendingWantedEntries)], {
-      type: "text/calendar;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `oshi-calendar-want-to-go-${toIsoDate(new Date())}.ics`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
-
-    const exportedKeys = pendingWantedEntries.map((entry) => entry.key);
-    setExportedWantToGoKeys((current) => Array.from(new Set([...current, ...exportedKeys])));
+  function exportWantToGo(entries: CalendarExportEntry[] = pendingWantedEntries) {
+    if (!entries.length) return;
+    try {
+      if (entries.some((entry) => entry.event.endDate && exportedWantToGoKeys.includes(entry.event.id)) && !window.confirm("以前、期間全体を書き出したイベントが含まれます。カレンダー側の重複を確認してから取り込んでください。書き出しますか？")) return;
+      const content = buildIcs(entries);
+      const filename = `oshi-calendar-${getJstToday()}-${Date.now()}.ics`;
+      downloadIcs(content, filename);
+      setLastExport({ content, filename });
+      setExportRecords((current) => ({ ...current, ...Object.fromEntries(entries.map((entry) => [entry.key, getEntryFingerprint(entry)])) }));
+      setExportedWantToGoKeys((current) => Array.from(new Set([...current, ...entries.map((entry) => entry.key)])));
+      setExportMessage("ファイルを書き出しました。保存や取り込みに失敗した場合は「直前のファイルを再保存」を使ってください。");
+    } catch (error) { setExportMessage(error instanceof Error ? error.message : "書き出しに失敗しました。"); }
   }
 
   function resetWantToGo() {
-    if (!wantToGoIds.length && !exportedWantToGoKeys.length) return;
-    if (!window.confirm("「行きたい」と書き出し履歴をすべてリセットしますか？")) return;
-
+    if (!wantToGoIds.length) return;
+    if (!window.confirm("「行きたい」をすべて解除しますか？出力履歴は残ります。外部カレンダーの予定は削除されません。")) return;
     setWantToGoIds([]);
+  }
+
+  function clearExportHistory() {
+    if (!window.confirm("出力履歴と再保存用ファイルを消去しますか？再度取り込むと予定が重複する可能性があります。外部カレンダーの予定は削除されません。")) return;
     setExportedWantToGoKeys([]);
+    setExportRecords({});
+    setLastExport({});
+    setExportMessage("出力履歴を消去しました。外部カレンダーの予定は変更していません。");
+  }
+
+  function togglePeriodDate(event: CalendarEvent, date: string) {
+    const key = `${event.id}::date-${date}`;
+    setWantToGoIds((current) => {
+      const withoutLegacy = current.filter((value) => value !== event.id);
+      return withoutLegacy.includes(key) ? withoutLegacy.filter((value) => value !== key) : [...withoutLegacy, key];
+    });
   }
 
   const availableEventTypes = EVENT_FILTER_ORDER.filter((eventType) =>
@@ -589,11 +342,10 @@ function App() {
   const hasAllEventTypes =
     availableEventTypes.length > 0 && availableEventTypes.every((eventType) => visibleEventTypes[eventType]);
   const exportButtonLabel = !wantedEntries.length
-    ? "カレンダーへ追加"
+    ? "新規分をICS出力"
     : pendingWantedEntries.length
-      ? `カレンダーへ追加（${pendingWantedEntries.length}件）`
-      : "書き出し済み";
-  const hasWantToGoData = wantToGoIds.length > 0 || exportedWantToGoKeys.length > 0;
+      ? `新規分をICS出力（${pendingWantedEntries.length}件）`
+      : "新規の出力対象なし";
 
   return (
     <div className="app-shell">
@@ -604,9 +356,9 @@ function App() {
             <h1>推し活カレンダー</h1>
             <p>3組の予定を、ひとつのカレンダーに。</p>
           </div>
-          <div className="header-note" aria-label="2026年8月31日時点の公開情報スナップショット">
+          <div className="header-note" aria-label={`${SNAPSHOT_DATE}時点の公開情報スナップショット`}>
             <span className="live-dot" />
-            <span>SNAPSHOT 2026.08.31</span>
+            <span>SNAPSHOT {SNAPSHOT_DATE.replace(/-/g, ".")}</span>
           </div>
         </div>
       </header>
@@ -688,21 +440,21 @@ function App() {
                 <h2 id="calendar-heading">予定を探す</h2>
               </div>
               <div className="calendar-heading-meta">
-                <span className="event-count">{visibleEvents.length}件の登録</span>
+                <span className="event-count">今月{monthEvents.length}件 / 全{calendarEvents.length}件</span>
                 <span className="want-to-go-count" aria-live="polite">
                   {wantedEntries.length}件 行きたい
                 </span>
                 <button
                   className="export-calendar-button"
                   type="button"
-                  onClick={exportWantToGo}
+                  onClick={() => exportWantToGo()}
                   disabled={!pendingWantedEntries.length}
                   title={
                     !wantedEntries.length
                       ? "詳細画面で「行きたい」を選択してください"
                       : pendingWantedEntries.length
                         ? "未書き出しの予定だけを追加します"
-                        : "同じ予定は再度書き出しません。新しい予定を選択してください"
+                        : "再ダウンロードは「出力・保存の管理」から行えます"
                   }
                 >
                   {exportButtonLabel}
@@ -711,20 +463,41 @@ function App() {
                   className="reset-want-to-go-button"
                   type="button"
                   onClick={resetWantToGo}
-                  disabled={!hasWantToGoData}
-                  title="選択状態と書き出し履歴をすべて消去します"
+                  disabled={!wantToGoIds.length}
+                  title="出力履歴は残して、行きたいの選択を解除します"
                 >
-                  リセット
+                  行きたいを全解除
                 </button>
               </div>
             </div>
 
-            <div className="calendar-grid" role="grid" aria-label={`${formatMonth(currentMonth)}のカレンダー`}>
+            <div className="view-controls" aria-label="表示方法">
+              <button type="button" className={`type-filter-button ${view === "month" ? "is-active" : ""}`} aria-pressed={view === "month"} onClick={() => setView("month")}>月間</button>
+              <button type="button" className={`type-filter-button ${view === "list" ? "is-active" : ""}`} aria-pressed={view === "list"} onClick={() => setView("list")}>一覧</button>
+              <label><input type="checkbox" checked={wantedOnly} onChange={(event) => setWantedOnly(event.target.checked)} /> 行きたいだけ</label>
+            </div>
+            {storageWarning && <p className="notice" role="alert">このブラウザに保存できません。選択・出力履歴は画面を閉じると失われる可能性があります。</p>}
+            {legacyPeriods.length > 0 && <p className="notice">以前選択した期間イベント（{legacyPeriods.map((event) => event.shortTitle).join("、")}）は、詳細から参加日を選び直してください。期間全体を自動では出力しません。</p>}
+            {exportMessage && <p className="notice" role="status">{exportMessage}</p>}
+            <details className="export-management">
+              <summary>出力・保存の管理</summary>
+              <p>ICSの書き出しは、カレンダーへの登録完了を意味しません。再取り込みによる重複は、カレンダーアプリによって防げない場合があります。</p>
+              <button type="button" disabled={!lastExport.content || !lastExport.filename} onClick={() => {
+                try { downloadIcs(lastExport.content, lastExport.filename); setExportMessage("直前と同じファイルを再保存しました。すでに取り込み済みなら再度取り込まないでください。"); }
+                catch { setExportMessage("再保存に失敗しました。ブラウザの保存設定を確認してください。"); }
+              }}>直前のファイルを再保存</button>
+              {changedWantedEntries.length > 0 && <button type="button" onClick={() => {
+                if (window.confirm("時刻・会場などを変更した予定を書き出します。自動同期ではありません。外部カレンダーの既存予定を確認・修正してから取り込んでください。")) exportWantToGo(changedWantedEntries);
+              }}>変更した予定を再出力（{changedWantedEntries.length}件）</button>}
+              <button type="button" disabled={!exportedWantToGoKeys.length && !Object.keys(exportRecords).length && !lastExport.content} onClick={clearExportHistory}>出力履歴を消去</button>
+              <p>選択・自分用の終了予定・出力履歴はこのブラウザだけに保存されます。全解除しても外部カレンダーの予定は削除されません。</p>
+            </details>
+
+            {view === "month" ? <div className="calendar-grid" role="group" aria-label={`${formatMonth(currentMonth)}のカレンダー`}>
               {WEEKDAYS.map((weekday, index) => (
                 <div
                   className={`weekday weekday-${index}`}
                   key={weekday}
-                  role="columnheader"
                 >
                   {weekday}
                 </div>
@@ -746,8 +519,8 @@ function App() {
                     }`}
                     key={key}
                     type="button"
-                    role="gridcell"
-                    aria-selected={isSelected}
+                    aria-pressed={isSelected}
+                    aria-current={key === today ? "date" : undefined}
                     aria-label={`${formatLongDate(key)}${holidayName ? `、${holidayName}` : ""}${dayEvents.length ? `、イベント${dayEvents.length}件` : ""}`}
                     title={holidayName ? `${holidayName}（祝日）` : undefined}
                     onClick={() => setSelectedDate(key)}
@@ -767,9 +540,23 @@ function App() {
                   </button>
                 );
               })}
-            </div>
+            </div> : <div className="event-list" aria-label="今月のイベント一覧">
+              {monthEvents.length ? monthEvents.map((event) => <button type="button" className="event-list-item" style={eventStyle(event.artist)} key={event.id}
+                onClick={() => {
+                  const wantedDate = wantedEntries.find((entry) => entry.event.id === event.id && entry.date! >= monthStart && entry.date! <= monthEnd)?.date;
+                  setSelectedDate(wantedOnly && wantedDate ? wantedDate : event.startDate < monthStart ? monthStart : event.startDate);
+                  document.getElementById("details-heading")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}>
+                <span className="list-location">{event.prefecture ?? "場所未確認"}</span>
+                <strong>{event.shortTitle}</strong>
+                <span>{wantedOnly ? wantedEntries.filter((entry) => entry.event.id === event.id && entry.date! >= monthStart && entry.date! <= monthEnd).map((entry) =>
+                  `${formatShortDate(entry.date!)} ${entry.session?.start ?? "終日"}${entry.session?.end || entry.personalEnd ? `〜${entry.session?.end ?? entry.personalEnd}${entry.personalEnd ? "（自分用）" : ""}` : ""}`).join(" / ")
+                  : `${formatRange(event)} · ${event.sessions?.map((session) => `${session.date ? `${formatShortDate(session.date)} ` : ""}${session.start ?? "時刻未確認"}`).join(" / ") ?? "時刻は詳細・公式へ"}`}</span>
+                <small>{ARTISTS[event.artist].label} · {event.venue ?? "会場未確認"}</small>
+              </button>) : <p className="notice">この月・条件に合う登録情報はありません。未掲載の予定は公式サイトをご確認ください。</p>}
+            </div>}
             <p className="calendar-footnote">
-              ※ 赤字は日曜・祝日です。期間イベントは開催期間中の日付に表示しています。「行きたい」を選んだ公演だけを、未書き出し分からカレンダーへ追加できます。終了時刻が未確認の公演は開始時刻のみで出力します。
+              ※ 赤字は日曜・祝日です（祝日対応：2026〜2027年）。期間表示は各日の開催を保証しません。情報は{SNAPSHOT_DATE}時点の記録で、自動更新ではありません。終了未確認の公演は自分用の終了予定を設定できます。
             </p>
           </section>
 
@@ -793,6 +580,10 @@ function App() {
                       isSessionWantToGo(wantToGoIds, event, sessionIndex)
                     }
                     onToggleSessionWantToGo={toggleSessionWantToGo}
+                    personalEnds={personalEnds}
+                    onPersonalEndChange={(key, value) => setPersonalEnds((current) => ({ ...current, [key]: value }))}
+                    selectedKeys={wantToGoIds}
+                    onTogglePeriodDate={togglePeriodDate}
                     key={event.id}
                   />
                 ))}
@@ -810,7 +601,7 @@ function App() {
 
       <footer className="app-footer">
         <span>推し活カレンダー｜非公式ファン作成</span>
-        <span>公開情報スナップショット：2026年8月31日時点</span>
+        <span>公開情報スナップショット：{SNAPSHOT_DATE}時点</span>
         <span>最新情報・受付条件は公式ページをご確認ください</span>
         <p className="app-footer-warning">
           このアプリは公式運営とは関係ありません。掲載情報の利用・転載は各公式サイトの規約・権利条件に従ってください。
@@ -826,18 +617,27 @@ function EventDetailCard({
   onToggleWantToGo,
   isSessionWanted,
   onToggleSessionWantToGo,
+  personalEnds,
+  onPersonalEndChange,
+  selectedKeys,
+  onTogglePeriodDate,
 }: {
   event: CalendarEvent;
   isWanted: boolean;
   onToggleWantToGo: (eventId: string) => void;
   isSessionWanted: (sessionIndex: number) => boolean;
   onToggleSessionWantToGo: (eventId: string, sessionIndex: number) => void;
+  personalEnds: Record<string, string>;
+  onPersonalEndChange: (key: string, value: string) => void;
+  selectedKeys: string[];
+  onTogglePeriodDate: (event: CalendarEvent, date: string) => void;
 }) {
   const artist = ARTISTS[event.artist];
   const hasMultipleSessions = (event.sessions?.length ?? 0) > 1;
   const isPerformance = ["concert", "birthday", "fc", "stage"].includes(event.eventType);
   const startLabel = isPerformance ? "開演" : "開始";
   const endLabel = isPerformance ? "終演" : "終了";
+  const periodDates = getPeriodDates(event);
   return (
     <article className="detail-card" style={eventStyle(event.artist)}>
       <div className="detail-card-topline">
@@ -848,7 +648,7 @@ function EventDetailCard({
           </span>
           <span className="event-type">{EVENT_TYPE_LABELS[event.eventType]}</span>
         </div>
-        <label className={`want-to-go-toggle ${isWanted ? "is-checked" : ""}`}>
+        {!periodDates.length && <label className={`want-to-go-toggle ${isWanted ? "is-checked" : ""}`}>
           <input
             type="checkbox"
             checked={isWanted}
@@ -857,7 +657,7 @@ function EventDetailCard({
           />
           <span className="want-to-go-box" aria-hidden="true" />
           <span>{hasMultipleSessions ? "全公演" : "行きたい"}</span>
-        </label>
+        </label>}
       </div>
       <h3>{event.title}</h3>
       <div className="detail-period">
@@ -885,7 +685,7 @@ function EventDetailCard({
         {event.ticketStatus && (
           <div className="meta-row">
             <span className="meta-label">チケット</span>
-            <span className="ticket-status">{event.ticketStatus}</span>
+            <span className="ticket-status">{getTicketDisplay(event)}</span>
           </div>
         )}
         {event.ticketSalesDate && (
@@ -893,11 +693,20 @@ function EventDetailCard({
             <span className="meta-label">受付期間</span>
             <span>
               {formatShortDate(event.ticketSalesDate)}〜
-              {event.ticketSalesEndDate ? formatShortDate(event.ticketSalesEndDate) : ""}
+              {event.ticketSalesEndDate ? `${formatShortDate(event.ticketSalesEndDate)} ${event.ticketSalesEndTime ?? "（締切時刻は公式へ）"}` : ""}
             </span>
           </div>
         )}
       </div>
+
+      <p className="checked-at">情報確認日：{event.ticketCheckedAt ?? event.checkedAt ?? SNAPSHOT_DATE}。最新状況は公式ページをご確認ください。</p>
+      {periodDates.length > 0 && <div className="period-choices">
+        <strong>参加日を選択</strong>
+        <p>休演日・出演日・公演時間は公式で確認してください。選んだ日だけを終日予定として出力します。</p>
+        <div>{periodDates.map((date) => <label key={date}>
+          <input type="checkbox" checked={selectedKeys.includes(`${event.id}::date-${date}`)} onChange={() => onTogglePeriodDate(event, date)} /> {formatShortDate(date)}
+        </label>)}</div>
+      </div>}
 
       {event.sessions?.length && (
         <div className="sessions-block">
@@ -910,7 +719,7 @@ function EventDetailCard({
           </div>
           <div className="sessions-list">
             {event.sessions.map((session, index) => (
-              <div className="session-row" key={`${event.id}-${session.label ?? index}`}>
+              <div className="session-row" key={`${event.id}-${session.id}`}>
                 {hasMultipleSessions ? (
                   <label className={`session-choice ${isSessionWanted(index) ? "is-checked" : ""}`}>
                     <input
@@ -926,6 +735,7 @@ function EventDetailCard({
                   <span className="session-label">{session.label ?? `${index + 1}公演`}</span>
                 )}
                 <span>
+                  {session.date && <strong>{formatShortDate(session.date)} </strong>}
                   {session.doors && <>開場 <strong>{session.doors}</strong></>}
                   {session.doors && session.start && <span className="time-separator">/</span>}
                   {session.start && <>{startLabel} <strong>{session.start}</strong></>}
@@ -934,6 +744,14 @@ function EventDetailCard({
                   )}
                   {session.end && <>{endLabel} <strong>{session.end}</strong></>}
                 </span>
+                {session.start && !session.end && <label className="personal-end">
+                  <span>自分用の終了予定（公式未確認）</span>
+                  <input type="time" value={personalEnds[getSessionSelectionKey(event, index)] ?? ""}
+                    aria-label={`${event.shortTitle} ${session.label ?? `${index + 1}公演`} 自分用の終了予定`}
+                    onChange={(input) => onPersonalEndChange(getSessionSelectionKey(event, index), input.target.value)} />
+                  {personalEnds[getSessionSelectionKey(event, index)] && <button type="button" onClick={() => onPersonalEndChange(getSessionSelectionKey(event, index), "")}>クリア</button>}
+                  <small>空欄なら開始時刻のみ。同日内で開始より後を指定。</small>
+                </label>}
               </div>
             ))}
           </div>
