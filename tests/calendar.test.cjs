@@ -129,6 +129,20 @@ test('Monday start and 2027 substitute holiday', () => {
 test('actual expired event no longer presented as currently open', () => {
   assert.match(c.getTicketDisplay(events.find(e => e.id === 'ocha-nanafes-2026'), new Date('2026-09-05T12:00:00+09:00')), /記録された受付期間は終了/);
 });
+test('December FC events include the confirmed dates and session details', () => {
+  const ocha = events.find(e => e.id === 'ocha-christmas-fc-2026');
+  const morning = events.find(e => e.id === 'morning-christmas-fc-2026');
+  const karin = events.find(e => e.id === 'karin-birthday-fc-2026');
+  assert.equal(ocha.startDate, '2026-12-14');
+  assert.equal(ocha.fcOnly, true);
+  assert.deepEqual(ocha.sessions.map(s => [s.label, s.doors, s.start]), [['1部', '16:00', '16:45'], ['2部', '18:45', '19:30']]);
+  assert.equal(morning.startDate, '2026-12-16');
+  assert.equal(morning.fcOnly, true);
+  assert.deepEqual(morning.sessions.map(s => [s.label, s.doors, s.start]), [['1部', '16:00', '16:45'], ['2部', '18:45', '19:30']]);
+  assert.equal(karin.startDate, '2026-12-19');
+  assert.equal(karin.fcOnly, true);
+  assert.equal(karin.sessions, undefined);
+});
 test('wanted-only dates exclude unselected period days and session dates', () => {
   const period = { ...fixture, sessions: undefined, endDate: '2026-09-07' };
   assert.equal(c.isWantedOnDate(period, ['example::date-2026-09-06'], '2026-09-05'), false);
