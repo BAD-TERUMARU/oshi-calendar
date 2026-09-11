@@ -99,6 +99,53 @@ export function getEventSelectionKeys(event: CalendarEvent) {
     : event.endDate ? getPeriodDates(event).map((date) => `${event.id}::date-${date}`) : [event.id];
 }
 
+export type WantToGoMigration = {
+  keys: string[];
+  changed: boolean;
+  migratedEventNames: string[];
+};
+
+/**
+ * Migrate date-level selections when an event is refined into dated sessions.
+ * Older snapshots used `eventId::date-YYYY-MM-DD`; keeping that key would make
+ * the user's saved selection disappear after the event gained a timetable.
+ */
+export function migrateWantToGoKeys(calendarEvents: CalendarEvent[], selectedKeys: string[]): WantToGoMigration {
+  const next = new Set<string>();
+  const migratedEventNames = new Set<string>();
+  const separator = "::date-";
+
+  for (const key of selectedKeys) {
+    const separatorIndex = key.lastIndexOf(separator);
+    if (separatorIndex < 0) {
+      next.add(key);
+      continue;
+    }
+
+    const eventId = key.slice(0, separatorIndex);
+    const date = key.slice(separatorIndex + separator.length);
+    const event = calendarEvents.find((candidate) => candidate.id === eventId);
+    const sessionKeys = event?.sessions?.flatMap((session, sessionIndex) =>
+      (session.date ?? event.startDate) === date ? [getSessionSelectionKey(event, sessionIndex)] : [],
+    ) ?? [];
+
+    if (!sessionKeys.length) {
+      next.add(key);
+      continue;
+    }
+
+    sessionKeys.forEach((sessionKey) => next.add(sessionKey));
+    if (event) migratedEventNames.add(event.shortTitle);
+  }
+
+  const keys = Array.from(next);
+  return {
+    keys,
+    changed: keys.length !== selectedKeys.length || keys.some((key, index) => key !== selectedKeys[index]),
+    migratedEventNames: Array.from(migratedEventNames),
+  };
+}
+
 export function isEventWantToGo(selectedKeys: string[], event: CalendarEvent) {
   if (selectedKeys.includes(event.id)) return true;
   const selectionKeys = getEventSelectionKeys(event);
@@ -167,7 +214,10 @@ export function withPersonalEnds(entries: CalendarExportEntry[], ends: Record<st
 export function getEntryFingerprint(entry: CalendarExportEntry) {
   // Exact content signature (not a lossy hash): changes need explicit re-export acknowledgement.
   return JSON.stringify([entry.key, entry.date, entry.event.title, entry.event.shortTitle,
-    entry.event.venue, entry.event.prefecture, entry.event.officialUrl, entry.session, entry.personalEnd]);
+    entry.event.venue, entry.event.prefecture, entry.event.eventType, entry.event.officialUrl,
+    entry.event.ticketStatus, entry.event.ticketSalesDate, entry.event.ticketSalesEndDate,
+    entry.event.ticketSalesEndTime, entry.event.ticketSourceUrl, entry.event.notes,
+    entry.session, entry.personalEnd]);
 }
 
 function escapeIcsText(value: string) {
@@ -245,7 +295,9 @@ function formatIcsDescription(entry: CalendarExportEntry) {
     session ? `選択公演: ${sessionLabel}` : "",
     sessionDetails ? `公演時間: ${sessionDetails}` : "",
     event.ticketStatus ? `チケット: ${getTicketDisplay(event)}` : "",
-    `情報確認日: ${event.ticketCheckedAt ?? event.checkedAt ?? SNAPSHOT_DATE}（最新情報は公式へ）`,
+    event.ticketCheckedAt ?? event.checkedAt
+      ? `個別確認日: ${event.ticketCheckedAt ?? event.checkedAt}（最新情報は公式へ）`
+      : `個別確認日: 未記録（アプリ更新日: ${SNAPSHOT_DATE}、最新情報は公式へ）`,
     entry.personalEnd ? `自分用の終了予定: ${entry.personalEnd}（公式の終演時刻ではありません）` : "",
     session?.start && !session.end && !entry.personalEnd ? "終了時刻未確認（開始時刻のみ）" : "",
     ticketPeriod ? `受付期間: ${ticketPeriod}` : "",

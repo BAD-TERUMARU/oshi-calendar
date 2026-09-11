@@ -19,7 +19,7 @@
 
 body {
   margin: 0;
-  min-width: 320px;
+  min-width: 0;
   background: var(--canvas);
 }
 
@@ -209,11 +209,18 @@ button {
 }
 
 .legend-list,
-.filter-list {
+.artist-filter-list {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 12px 18px;
+}
+
+.filter-list {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 10px;
 }
 
 .legend-item,
@@ -233,22 +240,30 @@ button {
 }
 
 .filter-label {
+  flex: 0 0 auto;
   color: var(--muted);
   font-size: 11px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .type-filter {
   display: flex;
   width: 100%;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--line);
 }
 
+.type-filter > .filter-label {
+  padding-top: 7px;
+}
+
 .type-filter-list {
   display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   gap: 6px;
 }
@@ -563,6 +578,14 @@ button {
   white-space: nowrap;
 }
 
+.chip-kind {
+  display: none;
+  flex: 0 0 auto;
+  font-size: 8px;
+  font-weight: 900;
+  opacity: 0.82;
+}
+
 .chip-range {
   flex: 0 0 auto;
   margin-left: auto;
@@ -619,12 +642,14 @@ button {
 .detail-card-topline {
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 12px;
 }
 
 .detail-card-topline-main {
   display: flex;
+  flex: 1 1 auto;
   min-width: 0;
   align-items: center;
   flex-wrap: wrap;
@@ -728,9 +753,11 @@ button {
   color: var(--ink);
   font-size: 15px;
   line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .detail-period {
+  flex-wrap: wrap;
   gap: 6px;
   padding: 9px 10px;
   border-radius: 8px;
@@ -740,9 +767,11 @@ button {
 }
 
 .detail-period strong {
+  min-width: 0;
   margin-left: auto;
   color: var(--navy);
   font-size: 11px;
+  overflow-wrap: anywhere;
 }
 
 .meta-icon {
@@ -773,6 +802,11 @@ button {
   display: block;
   color: #9aa4b4;
   font-size: 10px;
+}
+
+.meta-row > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .ticket-status {
@@ -824,6 +858,23 @@ button {
   display: flex;
   flex-direction: column;
   gap: 5px;
+}
+
+.session-scope-toggle {
+  display: block;
+  margin: 0 0 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  color: #66748a;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.session-scope-toggle:hover {
+  border-color: #b8c3d3;
+  color: var(--navy);
 }
 
 .session-row {
@@ -1020,15 +1071,24 @@ button {
   }
 
   .header-inner {
+    align-items: flex-start;
+    flex-direction: column;
     min-height: 145px;
     padding: 28px 0;
+    gap: 14px;
   }
 
   .header-note {
     align-self: flex-start;
-    margin-top: 2px;
+    margin-top: 0;
     padding: 7px 9px;
     font-size: 8px;
+  }
+
+  .brand-lockup h1 {
+    white-space: nowrap;
+    font-size: clamp(26px, 7.5vw, 32px);
+    line-height: 1.2;
   }
 
   .brand-lockup p {
@@ -1050,8 +1110,15 @@ button {
   }
 
   .month-switcher h2 {
-    min-width: 130px;
+    min-width: 108px;
     font-size: 21px;
+  }
+
+  .today-button {
+    flex: 0 0 auto;
+    margin-left: 0;
+    padding: 0 6px;
+    white-space: nowrap;
   }
 
   .selection-hint {
@@ -1066,7 +1133,7 @@ button {
   }
 
   .legend-list,
-  .filter-list {
+  .artist-filter-list {
     gap: 10px 14px;
   }
 
@@ -1074,6 +1141,11 @@ button {
     width: 100%;
     padding-top: 10px;
     border-top: 1px solid var(--line);
+  }
+
+  .artist-filter-list {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .workspace-grid {
@@ -1091,9 +1163,29 @@ button {
   }
 
   .calendar-heading-meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
     width: 100%;
-    justify-content: space-between;
-    gap: 6px;
+    justify-content: initial;
+    gap: 8px 10px;
+  }
+
+  .calendar-heading-meta .event-count {
+    white-space: nowrap;
+  }
+
+  .calendar-heading-meta .want-to-go-count {
+    justify-self: end;
+  }
+
+  .calendar-heading-meta .export-calendar-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .calendar-heading-meta .reset-want-to-go-button {
+    justify-self: end;
   }
 
   .card-heading h2 {
@@ -1144,6 +1236,13 @@ button {
 
   .chip-location {
     display: block;
+    flex: 1 1 auto;
+  }
+
+  .chip-kind {
+    display: block;
+    padding-left: 2px;
+    font-size: 7px;
   }
 
   .chip-range {
@@ -1197,6 +1296,13 @@ button {
 .export-management summary { cursor: pointer; font-weight: 600; min-height: 24px; }
 .export-management button, .personal-end button { background: white; border: 1px solid var(--line); border-radius: 7px; padding: 8px 12px; margin: 4px 8px 4px 0; cursor: pointer; font: inherit; }
 .export-management button:disabled { opacity: .45; cursor: not-allowed; }
+.export-preview { margin: 0 0 16px; padding: 12px; border: 1px solid #d9d0f1; border-radius: 9px; background: #fbf9ff; font-size: 12px; line-height: 1.6; }
+.export-preview summary { cursor: pointer; color: #7652b7; font-weight: 800; min-height: 24px; }
+.export-preview ul { display: grid; gap: 6px; margin: 10px 0; padding: 0; list-style: none; }
+.export-preview li { display: grid; gap: 1px; padding: 7px 8px; border-radius: 7px; background: white; }
+.export-preview li strong { color: #7652b7; font-size: 11px; }
+.export-preview li span { color: #58667a; overflow-wrap: anywhere; }
+.export-preview p { margin: 8px 0 0; color: #7b8496; font-size: 11px; }
 .event-list { display: grid; gap: 10px; }
 .event-list-item { display: grid; gap: 5px; width: 100%; text-align: left; border: 1px solid var(--line); border-left: 4px solid var(--event-color); background: white; padding: 14px; border-radius: 8px; font: inherit; cursor: pointer; overflow-wrap: anywhere; }
 .event-list-item:hover { background: var(--event-soft); }

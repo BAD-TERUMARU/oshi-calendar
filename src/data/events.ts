@@ -1,6 +1,6 @@
 import type { CalendarEvent } from "../types";
 
-// 公式イベントページを確認した2026-09-08時点のローカルスナップショットです。
+// 公式イベントページを確認した2026-09-11時点のローカルスナップショットです。
 // 自動取得へ移行するときは、この配列を取得・正規化処理の出力に置き換えます。
 // セッションIDは初回の配列位置で一度だけ採番し、並べ替え・追加後も変更しません。
 const OCHA_TOUR_URL =
@@ -172,7 +172,22 @@ export const events: CalendarEvent[] = [
     prefecture: "東京都",
     eventType: "stage",
     performers: ["宮本佳林", "ほか出演者"],
-    notes: "9/19〜9/25は昼夜公演、9/26は12:00開演の千秋楽公演です。一般発売は8/8開始、9/14までの案内です。",
+    sessions: [
+      { id: "session-0", date: "2026-09-19", label: "13:00公演", start: "13:00" },
+      { id: "session-1", date: "2026-09-19", label: "18:00公演", start: "18:00" },
+      { id: "session-2", date: "2026-09-20", label: "13:00公演", start: "13:00" },
+      { id: "session-3", date: "2026-09-20", label: "18:00公演", start: "18:00" },
+      { id: "session-4", date: "2026-09-21", label: "13:00公演", start: "13:00" },
+      { id: "session-5", date: "2026-09-21", label: "18:00公演", start: "18:00" },
+      { id: "session-6", date: "2026-09-22", label: "13:00公演", start: "13:00" },
+      { id: "session-7", date: "2026-09-22", label: "18:00公演", start: "18:00" },
+      { id: "session-8", date: "2026-09-23", label: "13:00公演", start: "13:00" },
+      { id: "session-9", date: "2026-09-23", label: "18:00公演", start: "18:00" },
+      { id: "session-10", date: "2026-09-25", label: "13:00公演", start: "13:00" },
+      { id: "session-11", date: "2026-09-25", label: "18:00公演", start: "18:00" },
+      { id: "session-12", date: "2026-09-26", label: "千秋楽", start: "12:00" },
+    ],
+    notes: "9/19〜9/23・9/25は13:00/18:00、9/26は12:00開演（9/24は休演）。一般発売は8/8開始、9/14までの案内です。",
     ticketStatus: "受付中",
     ticketSalesDate: "2026-08-08",
     ticketSalesEndDate: "2026-09-14",
@@ -244,7 +259,20 @@ export const events: CalendarEvent[] = [
     endDate: "2026-09-28",
     eventType: "online",
     performers: ["モーニング娘。'26 メンバー"],
-    notes: "色紙Aの先着販売は9/6まで、色紙Bは9/15まで。配信日・参加メンバーは回ごとに異なります。",
+    sessions: [
+      { id: "session-0", date: "2026-09-17", label: "1部", start: "18:00" },
+      { id: "session-1", date: "2026-09-17", label: "2部", start: "19:30" },
+      { id: "session-2", date: "2026-09-17", label: "3部", start: "21:00" },
+      { id: "session-3", date: "2026-09-24", label: "1部", start: "18:00" },
+      { id: "session-4", date: "2026-09-24", label: "2部", start: "19:30" },
+      { id: "session-5", date: "2026-09-25", label: "1部", start: "18:00" },
+      { id: "session-6", date: "2026-09-25", label: "2部", start: "19:30" },
+      { id: "session-7", date: "2026-09-25", label: "3部", start: "21:00" },
+      { id: "session-8", date: "2026-09-28", label: "1部", start: "18:00" },
+      { id: "session-9", date: "2026-09-28", label: "2部", start: "19:30" },
+      { id: "session-10", date: "2026-09-28", label: "3部", start: "21:00" },
+    ],
+    notes: "配信日は9/17・9/24・9/25・9/28。色紙Aの先着販売は終了、色紙Bは9/15 23:59まで（上限数で終了の場合あり）。",
     ticketStatus: "受付中",
     ticketSalesDate: "2026-08-09",
     ticketSalesEndDate: "2026-09-15",
@@ -873,12 +901,12 @@ export const events: CalendarEvent[] = [
     eventType: "festival",
     performers: ["OCHA NORMA", "ロージークロニクル"],
     sessions: [{ id: "session-0", doors: "17:00", start: "17:45" }],
-    notes: "OCHA NORMAは2025 Champion Actとして特別パフォーマンス。プレリクエスト抽選は8/21 12:00〜9/6 23:59。",
-    ticketStatus: "未発表",
+    notes: "OCHA NORMAは2025 Champion Actとして特別パフォーマンス。プレリクエスト抽選は8/21 12:00〜9/6 23:59。抽選当選者の入金期間は9/9 15:00〜9/13 23:59。",
+    ticketStatus: "当選者入金期間中",
     ticketSalesDate: "2026-08-21",
-    ticketSalesEndDate: "2026-09-06",
+    ticketSalesEndDate: "2026-09-13",
     ticketSalesEndTime: "23:59",
-    checkedAt: "2026-09-08",
+    checkedAt: "2026-09-11",
     officialUrl:
       "https://helloproject.com/event/05305b6807c16d8d5fb9f39e4e724a5197d367a6a989609405019489ee05b82c/",
   },
@@ -892,8 +920,8 @@ export const events: CalendarEvent[] = [
     prefecture: "東京都",
     eventType: "festival",
     performers: ["OCHA NORMA", "ロージークロニクル"],
-    notes: "チケットはTIGETで先行販売。",
-    ticketStatus: "受付中",
+    notes: "公式ページではTIGETで先行販売開始予定と案内。最新の受付状況は公式ページをご確認ください。",
+    ticketStatus: "未発表",
     officialUrl:
       "https://helloproject.com/event/c8aaeccce15eb5209994f81ff109c855e8f0637e1f9c175ba04b2129396235d0/",
   },
@@ -943,6 +971,7 @@ export const events: CalendarEvent[] = [
     sessions: [{ id: "session-0", label: "宮本佳林MAX", doors: "17:00", start: "18:00" }],
     ticketStatus: "一般発売予定",
     ticketSalesDate: "2026-11-14",
+    checkedAt: "2026-09-11",
     officialUrl: KARIN_TOUR_URL,
   },
   {

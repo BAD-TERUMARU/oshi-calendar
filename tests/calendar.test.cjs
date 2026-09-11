@@ -57,6 +57,21 @@ test('one show and reordering preserves identity, signature and UID', () => {
 test('legacy event selection expands to actual sessions', () => {
   assert.equal(entries(fixture, ['example']).length, 2);
 });
+test('date-level saved selection migrates to dated session keys', () => {
+  const dated = {
+    ...fixture,
+    sessions: [
+      { id: 'day-1-am', label: '昼', date: '2026-09-05', start: '13:00' },
+      { id: 'day-1-pm', label: '夜', date: '2026-09-05', start: '18:00' },
+      { id: 'day-2', label: '昼', date: '2026-09-06', start: '13:00' },
+    ],
+  };
+  const result = c.migrateWantToGoKeys([dated], ['example::date-2026-09-05']);
+  assert.deepEqual(result.keys, ['example::day-1-am', 'example::day-1-pm']);
+  assert.equal(result.changed, true);
+  assert.deepEqual(result.migratedEventNames, ['テスト']);
+  assert.equal(c.getWantToGoEntries([dated], result.keys).length, 2);
+});
 test('legacy selections also survive in the later bundled events', () => {
   const event = events.find(e => e.id === 'karin-kumagaya-2026-10-17');
   const selected = c.getWantToGoEntries([event], [`${event.id}::session-1`]);
@@ -84,6 +99,7 @@ test('changed end or venue changes signature, blank end does not', () => {
   assert.notEqual(c.getEntryFingerprint(entry), c.getEntryFingerprint({ ...entry, personalEnd: '15:00' }));
   assert.notEqual(c.getEntryFingerprint(entry), c.getEntryFingerprint({ ...entry, event: { ...fixture, venue: '新会場' } }));
   assert.equal(c.getEntryFingerprint(entry), c.getEntryFingerprint(c.withPersonalEnds([entry], { [entry.key]: '' })[0]));
+  assert.notEqual(c.getEntryFingerprint(entry), c.getEntryFingerprint({ ...entry, event: { ...fixture, ticketStatus: '受付終了' } }));
 });
 test('period exports only selected date, not whole span or legacy selection', () => {
   const event = { ...fixture, sessions: undefined, endDate: '2026-09-07' };

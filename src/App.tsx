@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { events } from "./data/events";
 import type { ArtistId, CalendarEvent, EventType } from "./types";
-import { toIsoDate, parseIsoDate, getCalendarDays, isDateInEvent, formatMonth, formatLongDate, formatShortDate, formatRange, getSessionSelectionKey, getEventSelectionKeys, isEventWantToGo, isSessionWantToGo, getWantToGoEntries, buildIcs, getTicketDisplay, getJstToday, getEntryFingerprint, withPersonalEnds, getPeriodDates, type CalendarExportEntry } from "./calendar";
+import { toIsoDate, parseIsoDate, getCalendarDays, isDateInEvent, formatMonth, formatLongDate, formatShortDate, formatRange, getSessionSelectionKey, getEventSelectionKeys, isEventWantToGo, isSessionWantToGo, getWantToGoEntries, buildIcs, getTicketDisplay, getJstToday, getEntryFingerprint, withPersonalEnds, getPeriodDates, migrateWantToGoKeys, type CalendarExportEntry } from "./calendar";
 import { JAPANESE_HOLIDAYS } from "./data/holidays";
 import { SNAPSHOT_DATE } from "./data/metadata";
 import { isWantedOnDate } from "./calendar";
@@ -46,6 +46,18 @@ const EVENT_FILTER_LABELS: Record<EventType, string> = {
   individual: "個別イベント",
   stage: "ステージ",
   online: "オンライン",
+  other: "その他",
+};
+
+const EVENT_CHIP_LABELS: Record<EventType, string> = {
+  concert: "ライブ",
+  festival: "フェス",
+  fc: "FC",
+  birthday: "BD",
+  release: "リリース",
+  individual: "個別",
+  stage: "舞台",
+  online: "配信",
   other: "その他",
 };
 
@@ -130,6 +142,14 @@ function eventStyle(artist: ArtistId) {
 
 
 function App() {
+  const initialWantToGoState = useMemo(
+    () => migrateWantToGoKeys(events, loadWantToGoIds()),
+    [],
+  );
+  const initialExportedWantToGoState = useMemo(
+    () => migrateWantToGoKeys(events, loadExportedWantToGoKeys()),
+    [],
+  );
   const [now, setNow] = useState(() => new Date());
   const today = getJstToday(now);
   const [currentMonth, setCurrentMonth] = useState(() => parseIsoDate(getJstToday()));
@@ -143,7 +163,7 @@ function App() {
   const [lastExport, setLastExport] = useState(() => loadStringRecord(LAST_EXPORT_KEY));
   const [exportRecords, setExportRecords] = useState(() => {
     const saved = loadStringRecord(EXPORT_RECORDS_KEY);
-    const legacy = loadExportedWantToGoKeys();
+    const legacy = initialExportedWantToGoState.keys;
     for (const entry of getWantToGoEntries(events, legacy)) {
       if (!saved[entry.key]) saved[entry.key] = getEntryFingerprint(entry);
     }
@@ -156,9 +176,19 @@ function App() {
   });
   const [visibleEventTypes, setVisibleEventTypes] =
     useState<Record<EventType, boolean>>(INITIAL_EVENT_TYPES);
-  const [wantToGoIds, setWantToGoIds] = useState<string[]>(() => loadWantToGoIds());
+  const [wantToGoIds, setWantToGoIds] = useState<string[]>(initialWantToGoState.keys);
+  const [selectionMigrationMessage] = useState(() => {
+    const selectionNames = initialWantToGoState.migratedEventNames;
+    const exportNames = initialExportedWantToGoState.migratedEventNames;
+    if (!selectionNames.length && !exportNames.length) return "";
+    const names = Array.from(new Set([...selectionNames, ...exportNames]));
+    return [
+      selectionNames.length ? `保存済みの「行きたい」を公演単位に移行しました（${names.join("、")}）。同日に複数公演がある日は、同日の公演をすべて選択しています。` : "",
+      exportNames.length ? `旧形式のICS出力履歴も公演単位に移行しました。同日に複数公演がある旧出力は、同日の公演をすべて出力済みとして扱います。時刻付きで出し直す場合は「出力・保存の管理」から履歴を消去して再出力してください。` : "",
+    ].filter(Boolean).join(" ");
+  });
   const [exportedWantToGoKeys, setExportedWantToGoKeys] = useState<string[]>(() =>
-    loadExportedWantToGoKeys(),
+    initialExportedWantToGoState.keys,
   );
 
   useEffect(() => {
@@ -394,17 +424,19 @@ function App() {
           </div>
           <div className="filter-list">
             <span className="filter-label">表示：</span>
-            {(Object.keys(ARTISTS) as ArtistId[]).map((artist) => (
-              <label className="filter-toggle" key={artist} style={eventStyle(artist)}>
-                <input
-                  type="checkbox"
-                  checked={visibleArtists[artist]}
-                  onChange={() => toggleArtist(artist)}
-                />
-                <span className="toggle-box" aria-hidden="true" />
-                <span>{ARTISTS[artist].label}</span>
-              </label>
-            ))}
+            <div className="artist-filter-list">
+              {(Object.keys(ARTISTS) as ArtistId[]).map((artist) => (
+                <label className="filter-toggle" key={artist} style={eventStyle(artist)}>
+                  <input
+                    type="checkbox"
+                    checked={visibleArtists[artist]}
+                    onChange={() => toggleArtist(artist)}
+                  />
+                  <span className="toggle-box" aria-hidden="true" />
+                  <span>{ARTISTS[artist].label}</span>
+                </label>
+              ))}
+            </div>
           </div>
           <div className="type-filter" aria-label="イベント種別で絞り込む">
             <span className="filter-label">種別：</span>
@@ -477,8 +509,30 @@ function App() {
               <label><input type="checkbox" checked={wantedOnly} onChange={(event) => setWantedOnly(event.target.checked)} /> 行きたいだけ</label>
             </div>
             {storageWarning && <p className="notice" role="alert">このブラウザに保存できません。選択・出力履歴は画面を閉じると失われる可能性があります。</p>}
+            {selectionMigrationMessage && <p className="notice" role="status">{selectionMigrationMessage}</p>}
             {legacyPeriods.length > 0 && <p className="notice">以前選択した期間イベント（{legacyPeriods.map((event) => event.shortTitle).join("、")}）は、詳細から参加日を選び直してください。期間全体を自動では出力しません。</p>}
             {exportMessage && <p className="notice" role="status">{exportMessage}</p>}
+            {pendingWantedEntries.length > 0 && <details className="export-preview">
+              <summary>出力前に確認（{pendingWantedEntries.length}件）</summary>
+              <ul>
+                {pendingWantedEntries.map((entry) => {
+                  const date = entry.date ?? entry.session?.date ?? entry.event.startDate;
+                  const sessionLabel = entry.session
+                    ? entry.session.label ?? `${(entry.sessionIndex ?? 0) + 1}公演`
+                    : "";
+                  const timeLabel = entry.session?.start
+                    ? `${entry.session.start}${entry.session.end ? `〜${entry.session.end}` : entry.personalEnd ? `〜${entry.personalEnd}（自分用）` : ""}`
+                    : "終日";
+                  return (
+                    <li key={entry.key}>
+                      <strong>{formatShortDate(date)} {entry.event.prefecture ?? "場所未確認"}</strong>
+                      <span>{entry.event.shortTitle}{sessionLabel ? ` · ${sessionLabel}` : ""} · {timeLabel}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p>ICSにはここに表示される未書き出し分だけが入ります。</p>
+            </details>}
             <details className="export-management">
               <summary>出力・保存の管理</summary>
               <p>ICSの書き出しは、カレンダーへの登録完了を意味しません。再取り込みによる重複は、カレンダーアプリによって防げない場合があります。</p>
@@ -532,7 +586,8 @@ function App() {
                           <span className="chip-mark">{ARTISTS[event.artist].mark}</span>
                           <span className="chip-title">{event.shortTitle}</span>
                           <span className="chip-location">{event.prefecture ?? event.venue ?? event.shortTitle}</span>
-                          {event.endDate && <span className="chip-range">期間</span>}
+                          <span className="chip-kind">{EVENT_CHIP_LABELS[event.eventType]}</span>
+                          {event.endDate && !event.sessions?.some((session) => session.date) && <span className="chip-range">期間</span>}
                         </span>
                       ))}
                       {dayEvents.length > 3 && <span className="more-events">+{dayEvents.length - 3}件</span>}
@@ -580,6 +635,7 @@ function App() {
                       isSessionWantToGo(wantToGoIds, event, sessionIndex)
                     }
                     onToggleSessionWantToGo={toggleSessionWantToGo}
+                    selectedDate={selectedDate}
                     personalEnds={personalEnds}
                     onPersonalEndChange={(key, value) => setPersonalEnds((current) => ({ ...current, [key]: value }))}
                     selectedKeys={wantToGoIds}
@@ -617,6 +673,7 @@ function EventDetailCard({
   onToggleWantToGo,
   isSessionWanted,
   onToggleSessionWantToGo,
+  selectedDate,
   personalEnds,
   onPersonalEndChange,
   selectedKeys,
@@ -627,17 +684,29 @@ function EventDetailCard({
   onToggleWantToGo: (eventId: string) => void;
   isSessionWanted: (sessionIndex: number) => boolean;
   onToggleSessionWantToGo: (eventId: string, sessionIndex: number) => void;
+  selectedDate: string;
   personalEnds: Record<string, string>;
   onPersonalEndChange: (key: string, value: string) => void;
   selectedKeys: string[];
   onTogglePeriodDate: (event: CalendarEvent, date: string) => void;
 }) {
+  const [showAllSessions, setShowAllSessions] = useState(false);
   const artist = ARTISTS[event.artist];
   const hasMultipleSessions = (event.sessions?.length ?? 0) > 1;
   const isPerformance = ["concert", "birthday", "fc", "stage"].includes(event.eventType);
   const startLabel = isPerformance ? "開演" : "開始";
   const endLabel = isPerformance ? "終演" : "終了";
   const periodDates = getPeriodDates(event);
+  const sessionEntries = (event.sessions ?? []).map((session, index) => ({ session, index }));
+  const hasDatedSessions = sessionEntries.some(({ session }) => Boolean(session.date));
+  const selectedSessionEntries = sessionEntries.filter(({ session }) => (session.date ?? event.startDate) === selectedDate);
+  const sessionsToRender = showAllSessions || !hasDatedSessions || !selectedSessionEntries.length
+    ? sessionEntries
+    : selectedSessionEntries;
+
+  useEffect(() => {
+    setShowAllSessions(false);
+  }, [selectedDate]);
   return (
     <article className="detail-card" style={eventStyle(event.artist)}>
       <div className="detail-card-topline">
@@ -699,7 +768,7 @@ function EventDetailCard({
         )}
       </div>
 
-      <p className="checked-at">情報確認日：{event.ticketCheckedAt ?? event.checkedAt ?? SNAPSHOT_DATE}。最新状況は公式ページをご確認ください。</p>
+      <p className="checked-at">{event.ticketCheckedAt ?? event.checkedAt ? `個別確認日：${event.ticketCheckedAt ?? event.checkedAt}` : `個別確認日：記録なし（アプリ更新日：${SNAPSHOT_DATE}）`}。最新状況は公式ページをご確認ください。</p>
       {periodDates.length > 0 && <div className="period-choices">
         <strong>参加日を選択</strong>
         <p>休演日・出演日・公演時間は公式で確認してください。選んだ日だけを終日予定として出力します。</p>
@@ -717,8 +786,15 @@ function EventDetailCard({
             </div>
             {hasMultipleSessions && <span className="session-selection-note">行きたい公演を選択</span>}
           </div>
+          {hasDatedSessions && selectedSessionEntries.length < sessionEntries.length && <button
+            type="button"
+            className="session-scope-toggle"
+            onClick={() => setShowAllSessions((current) => !current)}
+          >
+            {showAllSessions ? "選択日の公演だけ表示" : `他の日程も表示（${sessionEntries.length - selectedSessionEntries.length}公演）`}
+          </button>}
           <div className="sessions-list">
-            {event.sessions.map((session, index) => (
+            {sessionsToRender.map(({ session, index }) => (
               <div className="session-row" key={`${event.id}-${session.id}`}>
                 {hasMultipleSessions ? (
                   <label className={`session-choice ${isSessionWanted(index) ? "is-checked" : ""}`}>
@@ -760,7 +836,7 @@ function EventDetailCard({
 
       <div className="card-badges">
         {event.fcOnly && <span className="fc-badge">FC限定</span>}
-        {event.endDate && <span className="range-badge">期間イベント</span>}
+        {event.endDate && !event.sessions?.some((session) => session.date) && <span className="range-badge">期間イベント</span>}
       </div>
 
       {event.notes && <p className="detail-notes">{event.notes}</p>}
