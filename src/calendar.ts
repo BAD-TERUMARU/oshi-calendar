@@ -76,10 +76,12 @@ export function getTicketDisplay(event: CalendarEvent, now = new Date()) {
   const clock = new Date(now.getTime() + 9 * 3600000).toISOString().slice(11, 16);
   const end = event.ticketSalesEndDate;
   const start = event.ticketSalesDate;
+  const scope = event.ticketSalesLabel ?? "記録された受付期間";
+  const admission = event.ticketStatus === "無料" ? "観覧無料（確認日時点）・" : "";
   if (end && (today > end || (today === end && event.ticketSalesEndTime && clock >= event.ticketSalesEndTime))) {
-    return "記録された受付期間は終了・最新状況は公式へ";
+    return `${admission}${scope}は終了・最新状況は公式へ`;
   }
-  if (end === today && !event.ticketSalesEndTime) return "受付最終日・締切時刻は公式で確認";
+  if (end === today && !event.ticketSalesEndTime) return `${admission}${event.ticketSalesLabel ? `${event.ticketSalesLabel}の` : ""}受付最終日・締切時刻は公式で確認`;
   if (["受付前", "一般発売予定"].includes(event.ticketStatus ?? "") && start && today >= start) {
     return "発売予定日を迎えています・受付状況は要確認";
   }
@@ -211,13 +213,15 @@ export function withPersonalEnds(entries: CalendarExportEntry[], ends: Record<st
   return entries.map((entry) => ({ ...entry, personalEnd: entry.session?.end ? undefined : ends[entry.key] || undefined }));
 }
 
-export function getEntryFingerprint(entry: CalendarExportEntry) {
+export function getEntryFingerprint(entry: CalendarExportEntry, now = new Date()) {
   // Exact content signature (not a lossy hash): changes need explicit re-export acknowledgement.
-  return JSON.stringify([entry.key, entry.date, entry.event.title, entry.event.shortTitle,
+  return JSON.stringify([entry.key, entry.date, entry.event.startDate, entry.event.endDate,
+    entry.event.artist, entry.event.artists, entry.event.title, entry.event.shortTitle,
     entry.event.venue, entry.event.prefecture, entry.event.eventType, entry.event.officialUrl,
     entry.event.ticketStatus, entry.event.ticketSalesDate, entry.event.ticketSalesEndDate,
-    entry.event.ticketSalesEndTime, entry.event.ticketSourceUrl, entry.event.notes,
-    entry.session, entry.personalEnd]);
+    entry.event.ticketSalesStartTime, entry.event.ticketSalesEndTime, entry.event.ticketSalesLabel,
+    entry.event.ticketSourceUrl, entry.event.checkedAt, entry.event.ticketCheckedAt, entry.event.notes,
+    entry.session, entry.personalEnd, formatIcsDescription(entry, now)]);
 }
 
 function escapeIcsText(value: string) {
@@ -271,7 +275,7 @@ function formatSessionDetails(
   return [label, times].filter(Boolean).join(" ");
 }
 
-function formatIcsDescription(entry: CalendarExportEntry) {
+function formatIcsDescription(entry: CalendarExportEntry, now: Date) {
   const { event, session, sessionIndex } = entry;
   const sessionLabel = session
     ? session.label ?? `${(sessionIndex ?? 0) + 1}公演`
@@ -281,9 +285,9 @@ function formatIcsDescription(entry: CalendarExportEntry) {
     : event.sessions
       ?.map((eventSession, index) => formatSessionDetails(eventSession, index, event.eventType))
       .join("、");
-  const ticketPeriod = event.ticketSalesDate
-    ? `${formatShortDate(event.ticketSalesDate)}〜${
-        event.ticketSalesEndDate ? formatShortDate(event.ticketSalesEndDate) : ""
+  const ticketPeriod = event.ticketSalesDate || event.ticketSalesEndDate
+    ? `${event.ticketSalesDate ? `${formatShortDate(event.ticketSalesDate)} ${event.ticketSalesStartTime ?? ""}`.trim() : "開始日未記録"}〜${
+        event.ticketSalesEndDate ? `${formatShortDate(event.ticketSalesEndDate)} ${event.ticketSalesEndTime ?? "（締切時刻は公式へ）"}` : ""
       }`
     : "";
 
@@ -294,13 +298,13 @@ function formatIcsDescription(entry: CalendarExportEntry) {
     event.venue ? `会場: ${event.venue}` : "",
     session ? `選択公演: ${sessionLabel}` : "",
     sessionDetails ? `公演時間: ${sessionDetails}` : "",
-    event.ticketStatus ? `チケット: ${getTicketDisplay(event)}` : "",
+    event.ticketStatus ? `チケット: ${getTicketDisplay(event, now)}` : "",
     event.ticketCheckedAt ?? event.checkedAt
       ? `個別確認日: ${event.ticketCheckedAt ?? event.checkedAt}（最新情報は公式へ）`
       : `個別確認日: 未記録（アプリ更新日: ${SNAPSHOT_DATE}、最新情報は公式へ）`,
     entry.personalEnd ? `自分用の終了予定: ${entry.personalEnd}（公式の終演時刻ではありません）` : "",
     session?.start && !session.end && !entry.personalEnd ? "終了時刻未確認（開始時刻のみ）" : "",
-    ticketPeriod ? `受付期間: ${ticketPeriod}` : "",
+    ticketPeriod ? `${event.ticketSalesLabel ?? "受付期間"}: ${ticketPeriod}` : "",
     event.notes ?? "",
     event.officialUrl ? `公式情報: ${event.officialUrl}` : "",
   ]
@@ -313,8 +317,8 @@ function getCalendarEntryUid(entry: CalendarExportEntry) {
     : entry.event.endDate ? `${entry.event.id}-date-${entry.date}` : entry.event.id;
 }
 
-export function buildIcs(entries: CalendarExportEntry[]) {
-  const timestamp = formatIcsTimestamp(new Date());
+export function buildIcs(entries: CalendarExportEntry[], now = new Date()) {
+  const timestamp = formatIcsTimestamp(now);
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -329,7 +333,8 @@ export function buildIcs(entries: CalendarExportEntry[]) {
       const sessionLabel = session
         ? `（${session.label ?? `${(entry.sessionIndex ?? 0) + 1}公演`}）`
         : "";
-      const summary = `${ARTISTS[event.artist].label}｜${event.shortTitle}${sessionLabel}`;
+      const artists = Array.from(new Set([event.artist, ...(event.artists ?? [])]));
+      const summary = `${artists.map((artist) => ARTISTS[artist].label).join("・")}｜${event.shortTitle}${sessionLabel}`;
       const hasStartTime = isValidTime(session?.start);
       const end = session?.end ?? entry.personalEnd;
       const hasEndTime = hasStartTime && isValidTime(end);
@@ -352,7 +357,7 @@ export function buildIcs(entries: CalendarExportEntry[]) {
             : `DTEND;VALUE=DATE:${formatIcsDate(getNextIsoDate(date))}`,
         `SUMMARY:${escapeIcsText(summary)}`,
         location ? `LOCATION:${escapeIcsText(location)}` : "",
-        `DESCRIPTION:${escapeIcsText(formatIcsDescription(entry))}`,
+        `DESCRIPTION:${escapeIcsText(formatIcsDescription(entry, now))}`,
         event.officialUrl ? `URL:${event.officialUrl}` : "",
         hasStartTime ? "TRANSP:OPAQUE" : "TRANSP:TRANSPARENT",
         "END:VEVENT",

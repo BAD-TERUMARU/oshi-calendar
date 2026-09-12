@@ -1,9 +1,10 @@
 import { events as bundledEvents } from "../src/data/events";
+import { SNAPSHOT_DATE } from "../src/data/metadata";
 import type { CalendarEvent } from "../src/types";
 
 const SNAPSHOT_KEY = "events-latest";
 const DEFAULT_RANGE_MONTHS = 6;
-const BUNDLED_SNAPSHOT_AT = "2026-08-31T00:00:00+09:00";
+const BUNDLED_SNAPSHOT_AT = `${SNAPSHOT_DATE}T00:00:00+09:00`;
 
 interface KVNamespaceLike {
   get<T = unknown>(key: string, type?: "json"): Promise<T | null>;
