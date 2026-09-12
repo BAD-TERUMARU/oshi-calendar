@@ -884,6 +884,7 @@ export const events: CalendarEvent[] = [
     sessions: [{ id: "session-0", start: "17:00" }],
     notes: "観覧無料。優先観覧エリア抽選の応募は9/6 23:59まで。当日のお見送り会参加券付きCD販売あり。",
     ticketStatus: "無料",
+    ticketSalesLabel: "優先観覧エリア抽選",
     ticketSalesEndDate: "2026-09-06",
     ticketSalesEndTime: "23:59",
     checkedAt: "2026-09-08",

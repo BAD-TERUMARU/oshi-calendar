@@ -55,6 +55,8 @@ export interface CalendarEvent {
   ticketStatus?: TicketStatus;
   ticketSalesDate?: string;
   ticketSalesEndDate?: string;
+  /** Scope of this application period, e.g. a priority viewing area lottery. */
+  ticketSalesLabel?: string;
   checkedAt?: string;
   ticketCheckedAt?: string;
   ticketSourceUrl?: string;

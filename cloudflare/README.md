@@ -7,12 +7,12 @@
 - Cloudflare Workers Static Assets: React/Viteの画面配信
 - Workers Cron Trigger: 将来、定期取得をCloudflare側で行う場合の候補
 - Workers KV: 最新のイベントスナップショット保存
-- `/api/events`: 画面が最新データを取得するAPI
+- `/api/events`: 将来の画面接続用API。現在のReact画面は呼び出さず、`src/data/events.ts` を直接読み込みます。
 
 ## 取得範囲
 
-`wrangler.jsonc` の `DATA_RANGE_MONTHS` で指定します。初期値は「日本時間の今日から6か月先」です。
-開催前のイベントは毎回再確認し、受付状況や公式URLの変更を反映する設計です。
+APIの取得範囲は `wrangler.jsonc` の `DATA_RANGE_MONTHS` で指定します。初期値は「日本時間の今日から6か月先」です。この設定で画面の収録範囲は変わりません。
+開催前のイベントの再確認と受付状況・公式URLの更新は、将来コレクターを接続する際に実装・検証する範囲です。
 
 ## 現在のデプロイ
 
@@ -32,7 +32,7 @@ npm run cf:deploy
 4. `COLLECTOR_URL` に、公開情報だけを返すコレクターのURLを設定する
 5. `npm run build` の後に `npx wrangler deploy` を実行する
 
-現時点では `COLLECTOR_URL` が空で、Cloudflare側の自動取得は有効化していません。コレクターを設定しない場合、画面は同梱スナップショットへフォールバックします。
+現時点では `COLLECTOR_URL` が空で、Cloudflare側の自動取得は有効化していません。コレクター未設定時はAPIが同梱スナップショットを返します。設定した場合も、画面へのAPI接続、取得失敗時の前回データ保持、収録範囲・更新日時の表示を別途実装する必要があります。
 
 当面は、必要に応じて人が公式ページを確認してデータを更新し、ビルド後にGitHubやCloudflare Pagesへ反映する運用を想定します。将来、自動更新を実装する場合は、公式公開ページごとの取得・正規化処理、根拠URL、確認日時、失敗時の前回データ保持を追加で検証します。
 

@@ -6,9 +6,11 @@ import { toIsoDate, parseIsoDate, getCalendarDays, isDateInEvent, formatMonth, f
 import { JAPANESE_HOLIDAYS } from "./data/holidays";
 import { SNAPSHOT_DATE } from "./data/metadata";
 import { isWantedOnDate } from "./calendar";
+import { JournalWorkspace } from "./JournalWorkspace";
+import type { JournalView } from "./journal";
 
 const ARTISTS: Record<ArtistId, { label: string; color: string; soft: string; mark: string }> = {
-  ocha: { label: "OCHA NORMA", color: "#16a34a", soft: "#eaf8ef", mark: "O" },
+  ocha: { label: "OCHA NORMA", color: "#18733b", soft: "#eaf8ef", mark: "O" },
   morning: { label: "モーニング娘。'26", color: "#2563eb", soft: "#ebf2ff", mark: "M" },
   karin: { label: "宮本佳林", color: "#9333ea", soft: "#f5edff", mark: "K" },
 };
@@ -142,6 +144,7 @@ function eventStyle(artist: ArtistId) {
 
 
 function App() {
+  const [page, setPage] = useState<"calendar" | JournalView>("calendar");
   const initialWantToGoState = useMemo(
     () => migrateWantToGoKeys(events, loadWantToGoIds()),
     [],
@@ -278,6 +281,17 @@ function App() {
     setSelectedDate(date);
   }
 
+  function selectDateAndShowDetails(date: string, alwaysScroll = false) {
+    setSelectedDate(date);
+    if (alwaysScroll || window.matchMedia("(max-width: 900px)").matches) {
+      window.requestAnimationFrame(() => {
+        const heading = document.getElementById("details-heading");
+        heading?.focus({ preventScroll: true });
+        heading?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+      });
+    }
+  }
+
   function toggleArtist(artist: ArtistId) {
     setVisibleArtists((current) => ({ ...current, [artist]: !current[artist] }));
   }
@@ -394,6 +408,13 @@ function App() {
       </header>
 
       <main className="page-content">
+        <nav className="app-navigation" aria-label="推し活メニュー">
+          {([['calendar', 'カレンダー'], ['records', '現場記録'], ['dashboard', '振り返り'], ['songs', '生涯セトリ']] as const).map(([key, label]) => <button key={key} type="button" aria-pressed={page === key} onClick={() => setPage(key)}>{label}</button>)}
+        </nav>
+        <div hidden={page === "calendar"}>
+          <JournalWorkspace view={page === "calendar" ? "records" : page} wantedEntries={wantedEntries} onChangeView={setPage} />
+        </div>
+        <div hidden={page !== "calendar"}>
         <section className="toolbar" aria-label="カレンダー操作">
           <div className="month-switcher">
             <button className="icon-button" type="button" onClick={() => changeMonth(-1)} aria-label="前月">
@@ -575,9 +596,9 @@ function App() {
                     type="button"
                     aria-pressed={isSelected}
                     aria-current={key === today ? "date" : undefined}
-                    aria-label={`${formatLongDate(key)}${holidayName ? `、${holidayName}` : ""}${dayEvents.length ? `、イベント${dayEvents.length}件` : ""}`}
+                    aria-label={`${formatLongDate(key)}${holidayName ? `、${holidayName}` : ""}${dayEvents.length ? `、イベント${dayEvents.length}件、${dayEvents.map(event => event.shortTitle).join("、")}` : ""}`}
                     title={holidayName ? `${holidayName}（祝日）` : undefined}
-                    onClick={() => setSelectedDate(key)}
+                    onClick={() => selectDateAndShowDetails(key)}
                   >
                     <span className={`day-number weekday-${weekday}`}>{date.getDate()}</span>
                     <span className="event-stack">
@@ -599,15 +620,14 @@ function App() {
               {monthEvents.length ? monthEvents.map((event) => <button type="button" className="event-list-item" style={eventStyle(event.artist)} key={event.id}
                 onClick={() => {
                   const wantedDate = wantedEntries.find((entry) => entry.event.id === event.id && entry.date! >= monthStart && entry.date! <= monthEnd)?.date;
-                  setSelectedDate(wantedOnly && wantedDate ? wantedDate : event.startDate < monthStart ? monthStart : event.startDate);
-                  document.getElementById("details-heading")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  selectDateAndShowDetails(wantedOnly && wantedDate ? wantedDate : event.startDate < monthStart ? monthStart : event.startDate, true);
                 }}>
                 <span className="list-location">{event.prefecture ?? "場所未確認"}</span>
                 <strong>{event.shortTitle}</strong>
                 <span>{wantedOnly ? wantedEntries.filter((entry) => entry.event.id === event.id && entry.date! >= monthStart && entry.date! <= monthEnd).map((entry) =>
                   `${formatShortDate(entry.date!)} ${entry.session?.start ?? "終日"}${entry.session?.end || entry.personalEnd ? `〜${entry.session?.end ?? entry.personalEnd}${entry.personalEnd ? "（自分用）" : ""}` : ""}`).join(" / ")
                   : `${formatRange(event)} · ${event.sessions?.map((session) => `${session.date ? `${formatShortDate(session.date)} ` : ""}${session.start ?? "時刻未確認"}`).join(" / ") ?? "時刻は詳細・公式へ"}`}</span>
-                <small>{ARTISTS[event.artist].label} · {event.venue ?? "会場未確認"}</small>
+                <small>{Array.from(new Set([event.artist, ...(event.artists ?? [])])).map(artist => ARTISTS[artist].label).join("・")} · {event.venue ?? "会場未確認"}</small>
               </button>) : <p className="notice">この月・条件に合う登録情報はありません。未掲載の予定は公式サイトをご確認ください。</p>}
             </div>}
             <p className="calendar-footnote">
@@ -618,7 +638,7 @@ function App() {
           <aside className="details-panel" aria-labelledby="details-heading">
             <div className="details-date">
               <span className="section-kicker">SELECTED DATE</span>
-              <h2 id="details-heading">{formatLongDate(selectedDate)}</h2>
+              <h2 id="details-heading" tabIndex={-1} aria-live="polite">{formatLongDate(selectedDate)}</h2>
               <span className="details-count">
                 {selectedEvents.length ? `${selectedEvents.length}件のイベント` : "イベントはありません"}
               </span>
@@ -652,6 +672,7 @@ function App() {
               </div>
             )}
           </aside>
+        </div>
         </div>
       </main>
 
@@ -713,7 +734,7 @@ function EventDetailCard({
         <div className="detail-card-topline-main">
           <span className="artist-pill">
             <span className="pill-mark">{artist.mark}</span>
-            {artist.label}
+            {Array.from(new Set([event.artist, ...(event.artists ?? [])])).map(artistId => ARTISTS[artistId].label).join("・")}
           </span>
           <span className="event-type">{EVENT_TYPE_LABELS[event.eventType]}</span>
         </div>
@@ -757,11 +778,11 @@ function EventDetailCard({
             <span className="ticket-status">{getTicketDisplay(event)}</span>
           </div>
         )}
-        {event.ticketSalesDate && (
+        {(event.ticketSalesDate || event.ticketSalesEndDate) && (
           <div className="meta-row">
-            <span className="meta-label">受付期間</span>
+            <span className="meta-label">{event.ticketSalesLabel ?? "受付期間"}</span>
             <span>
-              {formatShortDate(event.ticketSalesDate)}〜
+              {event.ticketSalesDate ? `${formatShortDate(event.ticketSalesDate)} ${event.ticketSalesStartTime ?? ""}` : "開始日未記録"}〜
               {event.ticketSalesEndDate ? `${formatShortDate(event.ticketSalesEndDate)} ${event.ticketSalesEndTime ?? "（締切時刻は公式へ）"}` : ""}
             </span>
           </div>

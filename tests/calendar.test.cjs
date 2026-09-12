@@ -17,6 +17,20 @@ const fixture = { id: 'example', artist: 'ocha', title: '正式名称', shortTit
 const unfold = (value) => value.replace(/\r\n /g, '');
 const entries = (event = fixture, keys = ['example::session-0']) => c.getWantToGoEntries([event], keys);
 
+test('free admission remains distinct from a priority area application deadline', () => {
+  const event = { ...fixture, ticketStatus: '無料', ticketSalesEndDate: '2026-09-06', ticketSalesLabel: '優先観覧エリア抽選' };
+  const display = c.getTicketDisplay(event, new Date('2026-09-12T00:00:00+09:00'));
+  assert.match(display, /無料/); assert.match(display, /優先観覧エリア抽選.*終了/);
+});
+test('ICS change detection includes artists, confirmation dates and elapsed application deadlines', () => {
+  const original = entries({ ...fixture, checkedAt: '2026-09-11', ticketStatus: '受付中', ticketSalesEndDate: '2026-09-12', ticketSalesEndTime: '12:00' })[0];
+  const before = new Date('2026-09-12T11:00:00+09:00'); const after = new Date('2026-09-12T13:00:00+09:00');
+  for (const change of [{artist:'morning'}, {checkedAt:'2026-09-12'}, {artists:['ocha','morning']}]) {
+    assert.notEqual(c.getEntryFingerprint(original,before), c.getEntryFingerprint({...original,event:{...original.event,...change}},before));
+  }
+  assert.notEqual(c.getEntryFingerprint(original,before),c.getEntryFingerprint(original,after));
+});
+
 test('data IDs unique and dates/times valid', () => {
   assert.equal(new Set(events.map(e => e.id)).size, events.length);
   for (const event of events) {

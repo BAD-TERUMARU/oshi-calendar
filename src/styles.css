@@ -274,7 +274,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: #fff;
-  color: #8993a4;
+  color: #5e6b80;
   font-size: 10px;
   font-weight: 800;
   transition: 150ms ease;
@@ -414,7 +414,7 @@ button {
   padding: 6px 2px;
   border: 0;
   background: transparent;
-  color: #9aa4b4;
+  color: #5e6b80;
   font-size: 10px;
   font-weight: 800;
   white-space: nowrap;
@@ -458,12 +458,12 @@ button {
 
 .weekday-5,
 .day-number.weekday-5 {
-  color: #3c77d8;
+  color: #245db7;
 }
 
 .weekday-6,
 .day-number.weekday-6 {
-  color: #df5a62;
+  color: #b83542;
 }
 
 .weekday:nth-child(7n) {
@@ -508,7 +508,7 @@ button {
 }
 
 .day-cell.is-holiday .day-number {
-  color: #df5a62;
+  color: #b83542;
 }
 
 .day-cell.is-selected {
@@ -581,7 +581,7 @@ button {
 .chip-kind {
   display: none;
   flex: 0 0 auto;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 900;
   opacity: 0.82;
 }
@@ -589,7 +589,7 @@ button {
 .chip-range {
   flex: 0 0 auto;
   margin-left: auto;
-  font-size: 8px;
+  font-size: 11px;
   opacity: 0.72;
 }
 
@@ -602,7 +602,7 @@ button {
 
 .calendar-footnote {
   margin: 14px 2px 0;
-  color: #9aa4b4;
+  color: #5e6b80;
   font-size: 10px;
 }
 
@@ -745,7 +745,7 @@ button {
 }
 
 .event-type {
-  color: #8993a4;
+  color: #5e6b80;
 }
 
 .detail-card h3 {
@@ -794,13 +794,13 @@ button {
 }
 
 .meta-label {
-  color: #9aa4b4;
+  color: #5e6b80;
   font-weight: 800;
 }
 
 .meta-row small {
   display: block;
-  color: #9aa4b4;
+  color: #5e6b80;
   font-size: 10px;
 }
 
@@ -835,7 +835,7 @@ button {
 
 .subheading span {
   color: var(--event-color);
-  font-size: 8px;
+  font-size: 11px;
   letter-spacing: 0.13em;
 }
 
@@ -847,7 +847,7 @@ button {
 .session-selection-note {
   display: inline-flex !important;
   margin-left: auto;
-  color: #9aa4b4 !important;
+  color: #5e6b80 !important;
   font-size: 9px !important;
   font-weight: 700 !important;
   letter-spacing: 0 !important;
@@ -971,7 +971,7 @@ button {
 
 .detail-notes {
   margin: 13px 0 0;
-  color: #8993a4;
+  color: #5e6b80;
   font-size: 10px;
   line-height: 1.7;
 }
@@ -1032,7 +1032,7 @@ button {
   flex-wrap: wrap;
   padding: 18px 0 26px;
   border-top: 1px solid var(--line);
-  color: #9aa4b4;
+  color: #5e6b80;
   font-size: 10px;
 }
 
@@ -1082,7 +1082,7 @@ button {
     align-self: flex-start;
     margin-top: 0;
     padding: 7px 9px;
-    font-size: 8px;
+    font-size: 11px;
   }
 
   .brand-lockup h1 {
@@ -1223,11 +1223,11 @@ button {
   .event-chip {
     gap: 2px;
     padding: 3px 3px;
-    font-size: 8px;
+    font-size: 11px;
   }
 
   .chip-mark {
-    font-size: 7px;
+    font-size: 10px;
   }
 
   .chip-title {
@@ -1242,7 +1242,7 @@ button {
   .chip-kind {
     display: block;
     padding-left: 2px;
-    font-size: 7px;
+    font-size: 10px;
   }
 
   .chip-range {
@@ -1251,7 +1251,7 @@ button {
 
   .more-events {
     padding: 0 2px;
-    font-size: 8px;
+    font-size: 11px;
   }
 
   .calendar-footnote {
@@ -1327,7 +1327,7 @@ button:focus-visible, summary:focus-visible, input:focus-visible { outline: 3px 
 
 @media (max-width: 390px) {
   .event-chip {
-    font-size: 7px;
+    font-size: 10px;
   }
 
   .chip-mark {
@@ -1337,4 +1337,12 @@ button:focus-visible, summary:focus-visible, input:focus-visible { outline: 3px 
   .day-cell {
     min-height: 78px;
   }
+}
+
+#details-heading { scroll-margin-top: 20px; }
+.meta-label { overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .event-chip { flex-wrap: wrap; font-size: 11px; }
+  .chip-kind { width: 100%; padding-left: 0; font-size: 10px; }
+  .chip-location { width: 100%; }
 }
